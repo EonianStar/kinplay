@@ -6,30 +6,26 @@ import Image from 'next/image';
 import DefaultAvatar from '../icons/DefaultAvatar';
 
 export default function AvatarUpload() {
-  const { user, updateUserProfile } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
+  const { user, updateProfile } = useAuth();
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   // 生成随机头像
   const generateRandomAvatar = async () => {
     try {
-      setIsLoading(true);
       setError('');
-      setSuccess('');
+      setSuccessMessage('');
 
       // 生成随机字符串作为种子
       const seed = Math.random().toString(36).substring(7);
       const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`;
 
       // 更新用户头像
-      await updateUserProfile({ photoURL: avatarUrl });
-      setSuccess('更新成功');
+      await updateProfile({ photoURL: avatarUrl });
+      setSuccessMessage('更新成功');
     } catch (error) {
       console.error('Error updating avatar:', error);
       setError('更新头像失败，请重试');
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -63,8 +59,8 @@ export default function AvatarUpload() {
       {error && (
         <p className="text-red-500 text-sm">{error}</p>
       )}
-      {success && (
-        <p className="text-green-500 text-sm">{success}</p>
+      {successMessage && (
+        <p className="text-green-500 text-sm">{successMessage}</p>
       )}
     </div>
   );

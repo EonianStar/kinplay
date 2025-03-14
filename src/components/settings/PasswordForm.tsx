@@ -81,12 +81,14 @@ export default function PasswordForm() {
         await signOut();
         router.push('/login');
       }, 1000);
-    } catch (err: any) {
-      if (err.code === 'auth/wrong-password') {
-        setError('当前密码错误，请重试');
-      } else {
-        setError('密码修改失败，请重试');
-        console.error('修改密码错误:', err);
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'code' in error) {
+        if (error.code === 'auth/wrong-password') {
+          setError('当前密码错误，请重试');
+        } else {
+          setError('密码修改失败，请重试');
+          console.error('修改密码错误:', error);
+        }
       }
     } finally {
       setIsSubmitting(false);

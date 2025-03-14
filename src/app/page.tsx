@@ -1,9 +1,7 @@
 'use client';
 
 import { useAuth } from '../contexts/AuthContext';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
 import Navbar from '@/components/Navbar';
 
 export default function HomePage() {

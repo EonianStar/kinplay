@@ -10,7 +10,8 @@ import DeleteAccount from '@/components/settings/DeleteAccount';
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const router = useRouter();
 
   // 检查用户是否使用邮箱密码方式注册
