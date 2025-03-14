@@ -10,7 +10,9 @@ import {
   updateProfile,
   updatePassword as firebaseUpdatePassword,
   deleteUser as firebaseDeleteUser,
-  getAuth
+  getAuth,
+  signInWithPopup,
+  OAuthProvider
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
@@ -20,6 +22,7 @@ interface AuthContextType {
   error: Error | null;
   signInWithEmailPassword: (email: string, password: string) => Promise<void>;
   signUpWithEmailPassword: (email: string, password: string) => Promise<void>;
+  signInWithWeChat: () => Promise<void>;
   signOut: () => Promise<void>;
   updateUserProfile: (profile: { displayName?: string | null; photoURL?: string | null }) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
@@ -65,6 +68,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // 微信登录方法
+  const signInWithWeChat = async () => {
+    try {
+      setError(null);
+      const provider = new OAuthProvider('wechat.com');
+      await signInWithPopup(auth, provider);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('微信登录失败'));
+      throw err;
+    }
+  };
+
   // 登出方法
   const signOut = async () => {
     try {
@@ -106,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     error,
     signInWithEmailPassword,
     signUpWithEmailPassword,
+    signInWithWeChat,
     signOut,
     updateUserProfile,
     updatePassword,
