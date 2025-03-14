@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import DefaultAvatar from './icons/DefaultAvatar';
 import Image from 'next/image';
 
 export default function Navbar() {
