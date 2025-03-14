@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import DefaultAvatar from './icons/DefaultAvatar';
+import Image from 'next/image';
 
 export default function Navbar() {
   const router = useRouter();
@@ -127,14 +128,18 @@ export default function Navbar() {
                 className="flex text-sm rounded-full focus:outline-none bg-gray-100"
               >
                 {user?.photoURL ? (
-                  <img
-                    className="h-8 w-8 rounded-full object-cover ring-2 ring-white shadow-[0_0_10px_rgba(0,0,0,0.3)]"
+                  <Image
                     src={user.photoURL}
                     alt="用户头像"
+                    width={32}
+                    height={32}
+                    className="h-8 w-8 rounded-full"
                   />
                 ) : (
-                  <div className="h-8 w-8 rounded-full overflow-hidden ring-2 ring-white shadow-[0_0_10px_rgba(0,0,0,0.3)]">
-                    <DefaultAvatar />
+                  <div className="h-8 w-8 rounded-full bg-gray-400 flex items-center justify-center">
+                    <span className="text-white text-sm">
+                      {user?.email?.charAt(0).toUpperCase()}
+                    </span>
                   </div>
                 )}
               </button>

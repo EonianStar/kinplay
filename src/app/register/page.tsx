@@ -29,9 +29,13 @@ export default function RegisterPage() {
       setLoading(true);
       await signUpWithEmailPassword(email, password);
       router.push('/dashboard');
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError('注册失败，请重试');
-      console.error('Registration error:', err);
+      if (err instanceof Error) {
+        console.error('Registration error:', err.message);
+      } else {
+        console.error('Registration error:', err);
+      }
     } finally {
       setLoading(false);
     }
