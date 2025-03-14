@@ -12,16 +12,16 @@ export default function HomePage() {
       {user ? (
         <Navbar />
       ) : (
-        <nav className="bg-white shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between h-16">
-              <div className="flex items-center">
+      <nav className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex items-center">
                 {/* Logo */}
                 <Link href="/" className="flex items-center">
                   <span className="text-2xl font-bold text-indigo-600">KinPlay</span>
                 </Link>
-              </div>
-              <div className="flex items-center space-x-4">
+            </div>
+                <div className="flex items-center space-x-4">
                 <Link
                   href="/login"
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
@@ -34,10 +34,10 @@ export default function HomePage() {
                 >
                   注册
                 </Link>
-              </div>
             </div>
           </div>
-        </nav>
+        </div>
+      </nav>
       )}
 
       {/* 主要内容区域 */}
@@ -71,7 +71,7 @@ export default function HomePage() {
           <div className="text-center">
             <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
               为什么选择 KinPlay？
-            </h2>
+              </h2>
             <p className="mt-4 text-lg text-gray-500">
               我们提供独特的家庭游戏化解决方案
             </p>
