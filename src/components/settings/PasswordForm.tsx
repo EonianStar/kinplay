@@ -95,14 +95,6 @@ export default function PasswordForm() {
     }
   };
 
-  const handleToggleForm = () => {
-    if (!showForm) {
-      setShowForm(true);
-    } else {
-      handleSubmit(new Event('submit') as any);
-    }
-  };
-
   const passwordStrength = checkPasswordStrength(newPassword);
 
   return (

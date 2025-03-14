@@ -1,8 +1,6 @@
 'use client';
 
-import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
 import AvatarUpload from '@/components/settings/AvatarUpload';
 import NicknameForm from '@/components/settings/NicknameForm';
 import PasswordForm from '@/components/settings/PasswordForm';
@@ -10,9 +8,6 @@ import DeleteAccount from '@/components/settings/DeleteAccount';
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const router = useRouter();
 
   // 检查用户是否使用邮箱密码方式注册
   const isEmailPasswordUser = user?.providerData?.[0]?.providerId === 'password';
