@@ -13,7 +13,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   
   const router = useRouter();
-  const { signUp } = useAuth();
+  const { signUpWithEmailPassword } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,10 +27,11 @@ export default function RegisterPage() {
     try {
       setError('');
       setLoading(true);
-      await signUp(email, password);
-      router.push('/'); // 注册成功后跳转到首页
-    } catch (err) {
-      setError('注册失败: ' + (err instanceof Error ? err.message : '未知错误'));
+      await signUpWithEmailPassword(email, password);
+      router.push('/dashboard');
+    } catch (err: any) {
+      setError('注册失败，请重试');
+      console.error('Registration error:', err);
     } finally {
       setLoading(false);
     }
