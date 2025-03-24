@@ -1,136 +1,146 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
-import { 
-  User,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  onAuthStateChanged,
-  updateProfile,
-  updatePassword as firebaseUpdatePassword,
-  deleteUser as firebaseDeleteUser,
-  getAuth,
-  signInWithPopup,
-  OAuthProvider
-} from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { User } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  error: Error | null;
-  signInWithEmailPassword: (email: string, password: string) => Promise<void>;
-  signUpWithEmailPassword: (email: string, password: string) => Promise<void>;
-  signInWithWeChat: () => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  updateUserProfile: (profile: { displayName?: string | null; photoURL?: string | null }) => Promise<void>;
-  updatePassword: (newPassword: string) => Promise<void>;
-  deleteUser: () => Promise<void>;
+  updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  error: Error | null;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
+  signIn: async () => {},
+  signUp: async () => {},
+  signOut: async () => {},
+  updatePassword: async () => {},
+  error: null,
+});
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // 监听用户状态变化
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-      setLoading(false);
-    });
+    let mounted = true;
 
-    return unsubscribe;
+    const initializeAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (mounted) {
+          setUser(session?.user ?? null);
+          setLoading(false);
+        }
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+          if (mounted) {
+            setUser(session?.user ?? null);
+            setLoading(false);
+          }
+        });
+
+        return () => {
+          subscription.unsubscribe();
+        };
+      } catch (err) {
+        console.error('Auth initialization error:', err);
+        if (mounted) {
+          setError(err instanceof Error ? err : new Error('认证初始化失败'));
+          setLoading(false);
+        }
+      }
+    };
+
+    initializeAuth();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  // 邮箱密码登录方法
-  const signInWithEmailPassword = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string) => {
     try {
-      setError(null);
-      await signInWithEmailAndPassword(auth, email, password);
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
     } catch (err) {
       setError(err instanceof Error ? err : new Error('登录失败'));
       throw err;
     }
   };
 
-  // 邮箱密码注册方法
-  const signUpWithEmailPassword = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string) => {
     try {
-      setError(null);
-      await createUserWithEmailAndPassword(auth, email, password);
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      if (error) throw error;
     } catch (err) {
       setError(err instanceof Error ? err : new Error('注册失败'));
       throw err;
     }
   };
 
-  // 微信登录方法
-  const signInWithWeChat = async () => {
-    try {
-      setError(null);
-      const provider = new OAuthProvider('wechat.com');
-      await signInWithPopup(auth, provider);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('微信登录失败'));
-      throw err;
-    }
-  };
-
-  // 登出方法
   const signOut = async () => {
     try {
-      setError(null);
-      await firebaseSignOut(auth);
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
     } catch (err) {
-      setError(err instanceof Error ? err : new Error('登出失败'));
+      setError(err instanceof Error ? err : new Error('退出登录失败'));
       throw err;
     }
   };
 
-  const updateUserProfile = async (profile: { displayName?: string | null; photoURL?: string | null }) => {
-    if (!user) throw new Error('No user logged in');
-    
-    // 获取最新的用户对象
-    const currentUser = getAuth().currentUser;
-    if (!currentUser) throw new Error('No user logged in');
-    
-    // 使用最新的用户对象更新资料
-    await updateProfile(currentUser, profile);
-    
-    // 强制更新用户状态以触发重新渲染
-    setUser({ ...currentUser });
-  };
+  const updatePassword = async (currentPassword: string, newPassword: string) => {
+    try {
+      // 首先验证当前密码
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user?.email || '',
+        password: currentPassword,
+      });
 
-  const updatePassword = async (newPassword: string) => {
-    if (!user) throw new Error('No user logged in');
-    await firebaseUpdatePassword(user, newPassword);
-  };
+      if (signInError) {
+        throw new Error('Invalid credentials');
+      }
 
-  const deleteUser = async () => {
-    if (!user) throw new Error('No user logged in');
-    await firebaseDeleteUser(user);
+      // 更新密码
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (updateError) {
+        throw updateError;
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('密码更新失败'));
+      throw err;
+    }
   };
 
   const value = {
     user,
     loading,
-    error,
-    signInWithEmailPassword,
-    signUpWithEmailPassword,
-    signInWithWeChat,
+    signIn,
+    signUp,
     signOut,
-    updateUserProfile,
     updatePassword,
-    deleteUser
+    error,
   };
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 }
@@ -138,7 +148,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error('useAuth 必须在 AuthProvider 内部使用');
   }
   return context;
-} 
+}
+
+export default AuthProvider; 

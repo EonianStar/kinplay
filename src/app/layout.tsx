@@ -1,34 +1,29 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import ClientLayout from '../components/ClientLayout';
-import { AuthProvider } from '../contexts/AuthContext';
+import type { Metadata } from 'next';
+import './globals.css';
+import { Inter } from 'next/font/google';
+import { AuthProvider } from '@/contexts/AuthContext';
+import Navbar from '@/components/layout/Navbar';
+import { Toaster } from 'react-hot-toast';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: "KinPlay - 家庭游戏化生活平台",
-  description: "一个帮助家庭成员共同成长进步的游戏化生活平台",
+  title: 'KinPlay - 让家庭生活更有趣',
+  description: '通过游戏化的方式管理家庭任务，培养良好习惯',
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
-    <html lang="zh">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+    <html lang="zh-CN">
+      <body className={inter.className}>
         <AuthProvider>
-          <ClientLayout>{children}</ClientLayout>
+          <Navbar />
+          {children}
+          <Toaster />
         </AuthProvider>
       </body>
     </html>
