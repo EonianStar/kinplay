@@ -1,14 +1,31 @@
 'use client';
 
 import { Fragment, useState, useEffect } from 'react';
-import { Dialog, Transition, Listbox } from '@headlessui/react';
-import { XMarkIcon, CheckIcon, ChevronUpDownIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { Dialog, Transition, Listbox, Tab } from '@headlessui/react';
+import { 
+  XMarkIcon, 
+  CheckIcon, 
+  ChevronUpDownIcon, 
+  PlusIcon, 
+  TrashIcon, 
+  EllipsisVerticalIcon, 
+  ChevronUpIcon, 
+  ChevronDownIcon, 
+  MinusIcon 
+} from '@heroicons/react/24/outline';
+import { StarIcon, ForwardIcon } from '@heroicons/react/24/solid';
 import { 
   DailyDifficulty, 
   DailyRepeatPeriod, 
   CreateDailyRequest, 
-  ActivePattern
+  ActivePattern,
+  Daily,
+  WeeklyActiveDays,
+  MonthlyActiveDays,
+  YearlyActiveMonths
 } from '@/types/daily';
+import { createPortal } from 'react-dom';
+import { Combobox } from '@headlessui/react';
 
 // 难度选项
 const difficultyOptions = [
@@ -51,12 +68,52 @@ const createMonthDayOptions = () => {
   }));
 };
 
+// 添加 CSS 动画
+const styles = `
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.shake-animation {
+  animation: shake 0.2s ease-in-out 0s 3;
+  border-color: #EF4444 !important;
+}
+`;
+
+// 添加预定义标签
+const predefinedTags = ['学习', '工作', '家务', '健康', '社交', '财务', '兴趣'];
+
 interface DailyEditDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (dailyData: CreateDailyRequest) => void;
-  initialData?: any;
+  onSave: (dailyData: CreateDailyRequest | Partial<Daily>) => void;
+  initialData?: Partial<Daily>;
 }
+
+// 难度星级映射
+const difficultyStars: Record<DailyDifficulty, number> = {
+  [DailyDifficulty.VERY_EASY]: 1,
+  [DailyDifficulty.EASY]: 2,
+  [DailyDifficulty.MEDIUM]: 3,
+  [DailyDifficulty.HARD]: 4,
+};
+
+// 重命名组件以避免冲突
+const DifficultyStarsDisplay = ({ difficulty, className }: { difficulty: DailyDifficulty, className?: string }) => {
+  const starCount = difficultyStars[difficulty];
+  return (
+    <div className={`flex ${className || ''}`}>
+      {[...Array(starCount)].map((_, index) => (
+        <StarIcon
+          key={index}
+          className="h-3.5 w-3.5 text-yellow-400"
+        />
+      ))}
+    </div>
+  );
+};
 
 export default function DailyEditDialog({
   isOpen,
@@ -64,48 +121,61 @@ export default function DailyEditDialog({
   onSave,
   initialData
 }: DailyEditDialogProps) {
-  // 表单状态
+  // 状态定义
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [checklist, setChecklist] = useState<{ id?: string; title: string; completed?: boolean }[]>([]);
-  const [difficulty, setDifficulty] = useState(difficultyOptions[0]);
-  const [startDate, setStartDate] = useState('');
-  const [repeatPeriod, setRepeatPeriod] = useState(repeatPeriodOptions[0]);
-  const [dailyFrequency, setDailyFrequency] = useState(1);
-  const [selectedWeekDays, setSelectedWeekDays] = useState<number[]>([]);
-  const [selectedMonthDays, setSelectedMonthDays] = useState<number[]>([]);
-  const [selectedMonths, setSelectedMonths] = useState<number[]>([]);
+  const [difficulty, setDifficulty] = useState<DailyDifficulty>(DailyDifficulty.MEDIUM);
+  const [repeatPeriod, setRepeatPeriod] = useState<DailyRepeatPeriod>(DailyRepeatPeriod.DAILY);
+  const [activePattern, setActivePattern] = useState<ActivePattern>({ type: DailyRepeatPeriod.DAILY, value: 1 });
+  const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [tags, setTags] = useState<string[]>([]);
-  const [newTag, setNewTag] = useState('');
-  const [errors, setErrors] = useState<{ [key: string]: boolean }>({});
-
-  // 今天的日期，格式为YYYY-MM-DD
-  const today = new Date().toISOString().split('T')[0];
-
-  // 初始化表单
+  const [customTag, setCustomTag] = useState('');
+  const [subtasks, setSubtasks] = useState<{ id?: string; title: string; completed: boolean }[]>([]);
+  const [newSubtask, setNewSubtask] = useState('');
+  
+  // 表单验证错误状态
+  const [titleError, setTitleError] = useState(false);
+  
+  // 控制弹窗挂载状态
+  const [mounted, setMounted] = useState(false);
+  
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+  
+  // 初始化数据
   useEffect(() => {
     if (initialData) {
+      // 设置其他字段
       setTitle(initialData.title || '');
       setDescription(initialData.description || '');
-      setChecklist(initialData.checklist || []);
+      setSubtasks(initialData.checklist || []);
+      setDifficulty(initialData.difficulty || DailyDifficulty.MEDIUM);
+      setStartDate(initialData.start_date || new Date().toISOString().split('T')[0]);
+      setRepeatPeriod(initialData.repeat_period || DailyRepeatPeriod.DAILY);
       
-      const selectedDifficulty = difficultyOptions.find(option => option.id === initialData.difficulty);
-      setDifficulty(selectedDifficulty || difficultyOptions[0]);
+      // 添加调试日志
+      console.log("初始化任务数据:", initialData);
       
-      setStartDate(initialData.start_date || today);
-      
-      const selectedRepeatPeriod = repeatPeriodOptions.find(option => option.id === initialData.repeat_period);
-      setRepeatPeriod(selectedRepeatPeriod || repeatPeriodOptions[0]);
-      
+      // 设置活跃模式 (activePattern)
       if (initialData.active_pattern) {
+        console.log("活跃模式:", initialData.active_pattern);
+        // 直接使用初始数据中的活跃模式
+        setActivePattern(initialData.active_pattern);
+      } else {
+        // 没有活跃模式时使用默认值
         if (initialData.repeat_period === DailyRepeatPeriod.DAILY) {
-          setDailyFrequency(initialData.active_pattern.value || 1);
+          setActivePattern({ type: DailyRepeatPeriod.DAILY, value: 1 });
         } else if (initialData.repeat_period === DailyRepeatPeriod.WEEKLY) {
-          setSelectedWeekDays(initialData.active_pattern.value || []);
+          setActivePattern({ type: DailyRepeatPeriod.WEEKLY, value: [] });
         } else if (initialData.repeat_period === DailyRepeatPeriod.MONTHLY) {
-          setSelectedMonthDays(initialData.active_pattern.value || []);
+          setActivePattern({ type: DailyRepeatPeriod.MONTHLY, value: [] });
         } else if (initialData.repeat_period === DailyRepeatPeriod.YEARLY) {
-          setSelectedMonths(initialData.active_pattern.value || []);
+          setActivePattern({ type: DailyRepeatPeriod.YEARLY, value: [] });
+        } else {
+          // 默认值
+          setActivePattern({ type: DailyRepeatPeriod.DAILY, value: 1 });
         }
       }
       
@@ -114,47 +184,69 @@ export default function DailyEditDialog({
       // 重置表单
       resetForm();
     }
-    setErrors({});
-  }, [initialData, isOpen]);
+    setTitleError(false);
+  }, [initialData]);
 
   // 重置表单到初始状态
   const resetForm = () => {
     setTitle('');
+    setTitleError(false);
     setDescription('');
-    setChecklist([]);
-    setDifficulty(difficultyOptions[0]);
-    setStartDate(today);
-    setRepeatPeriod(repeatPeriodOptions[0]);
-    setDailyFrequency(1);
-    setSelectedWeekDays([]);
-    setSelectedMonthDays([]);
-    setSelectedMonths([]);
+    setSubtasks([]);
+    setDifficulty(DailyDifficulty.MEDIUM);
+    setStartDate(new Date().toISOString().split('T')[0]);
+    setRepeatPeriod(DailyRepeatPeriod.DAILY);
+    setActivePattern({ type: DailyRepeatPeriod.DAILY, value: 1 });
     setTags([]);
-    setNewTag('');
+    setCustomTag('');
+    setNewSubtask('');
   };
 
   // 添加新的子任务
-  const addChecklistItem = () => {
-    setChecklist([...checklist, { title: '' }]);
+  const addSubtask = () => {
+    setSubtasks([...subtasks, { title: '', completed: false }]);
   };
 
   // 更新子任务标题
-  const updateChecklistItemTitle = (index: number, title: string) => {
-    const newChecklist = [...checklist];
-    newChecklist[index].title = title;
-    setChecklist(newChecklist);
+  const updateSubtaskTitle = (index: number, title: string) => {
+    const newSubtasks = [...subtasks];
+    newSubtasks[index].title = title;
+    setSubtasks(newSubtasks);
   };
 
   // 删除子任务
-  const removeChecklistItem = (index: number) => {
-    setChecklist(checklist.filter((_, i) => i !== index));
+  const removeSubtask = (index: number) => {
+    setSubtasks(subtasks.filter((_, i) => i !== index));
   };
 
-  // 添加标签
-  const addTag = () => {
-    if (newTag.trim() && !tags.includes(newTag.trim())) {
-      setTags([...tags, newTag.trim()]);
-      setNewTag('');
+  // 添加标签处理方法
+  const handleTagChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    if (value === '') return;
+    
+    if (!tags.includes(value)) {
+      setTags(prev => [...prev, value]);
+    }
+    e.target.value = ''; // 重置选择
+  };
+
+  // 添加自定义标签处理方法
+  const handleCustomTagChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCustomTag(e.target.value);
+  };
+
+  const handleAddCustomTag = () => {
+    if (customTag.trim() && !tags.includes(customTag.trim())) {
+      setTags(prev => [...prev, customTag.trim()]);
+      setCustomTag('');
+    }
+  };
+
+  // 处理Enter键添加标签
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddCustomTag();
     }
   };
 
@@ -163,65 +255,102 @@ export default function DailyEditDialog({
     setTags(tags.filter(tag => tag !== tagToRemove));
   };
 
+  // 重复周期变化处理
+  const handleRepeatPeriodChange = (newPeriod: DailyRepeatPeriod) => {
+    // 先设置周期
+    setRepeatPeriod(newPeriod);
+    
+    // 根据新周期重置活跃模式数据
+    if (newPeriod === DailyRepeatPeriod.DAILY) {
+      setActivePattern({ type: DailyRepeatPeriod.DAILY, value: 1 });
+    } else if (newPeriod === DailyRepeatPeriod.WEEKLY) {
+      setActivePattern({ type: DailyRepeatPeriod.WEEKLY, value: [] });
+    } else if (newPeriod === DailyRepeatPeriod.MONTHLY) {
+      setActivePattern({ type: DailyRepeatPeriod.MONTHLY, value: [] });
+    } else if (newPeriod === DailyRepeatPeriod.YEARLY) {
+      setActivePattern({ type: DailyRepeatPeriod.YEARLY, value: [] });
+    }
+  };
+
   // 提交表单
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    let hasError = false;
     
     // 验证
-    const newErrors: { [key: string]: boolean } = {};
     if (!title.trim()) {
-      newErrors.title = true;
-    }
-    if (!difficulty) {
-      newErrors.difficulty = true;
-    }
-    if (!repeatPeriod) {
-      newErrors.repeatPeriod = true;
-    }
-    // 根据重复周期验证活跃方式
-    if (repeatPeriod.id === DailyRepeatPeriod.WEEKLY && selectedWeekDays.length === 0) {
-      newErrors.weekDays = true;
-    }
-    if (repeatPeriod.id === DailyRepeatPeriod.MONTHLY && selectedMonthDays.length === 0) {
-      newErrors.monthDays = true;
-    }
-    if (repeatPeriod.id === DailyRepeatPeriod.YEARLY && selectedMonths.length === 0) {
-      newErrors.months = true;
+      setTitleError(true);
+      hasError = true;
     }
     
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      // 1秒后清除错误
-      setTimeout(() => setErrors({}), 1000);
+    if (!difficulty) {
+      hasError = true;
+    }
+    
+    if (!repeatPeriod) {
+      hasError = true;
+    }
+    
+    // 根据重复周期验证活跃方式
+    if (repeatPeriod === DailyRepeatPeriod.WEEKLY) {
+      const weeklyPattern = activePattern.value as WeeklyActiveDays;
+      if (!Array.isArray(weeklyPattern) || weeklyPattern.length === 0) {
+        hasError = true;
+      }
+    }
+    
+    if (repeatPeriod === DailyRepeatPeriod.MONTHLY) {
+      const monthlyPattern = activePattern.value as MonthlyActiveDays;
+      if (!Array.isArray(monthlyPattern) || monthlyPattern.length === 0) {
+        hasError = true;
+      }
+    }
+    
+    if (repeatPeriod === DailyRepeatPeriod.YEARLY) {
+      const yearlyPattern = activePattern.value as YearlyActiveMonths;
+      if (!Array.isArray(yearlyPattern) || yearlyPattern.length === 0) {
+        hasError = true;
+      }
+    }
+    
+    if (hasError) {
+      // 1秒后清除错误状态
+      setTimeout(() => {
+        setTitleError(false);
+      }, 1000);
       return;
     }
     
     // 构建活跃方式数据
-    let activePattern: ActivePattern;
-    if (repeatPeriod.id === DailyRepeatPeriod.DAILY) {
-      activePattern = {
+    let activePatternToSave: ActivePattern;
+    if (repeatPeriod === DailyRepeatPeriod.DAILY) {
+      const dailyValue = typeof activePattern.value === 'number' 
+        ? activePattern.value 
+        : 1;
+      
+      activePatternToSave = {
         type: DailyRepeatPeriod.DAILY,
-        value: Math.min(24, Math.max(1, dailyFrequency)) // 限制在1-24之间
+        value: Math.min(24, Math.max(1, dailyValue)) // 限制在1-24之间
       };
-    } else if (repeatPeriod.id === DailyRepeatPeriod.WEEKLY) {
-      activePattern = {
+    } else if (repeatPeriod === DailyRepeatPeriod.WEEKLY) {
+      activePatternToSave = {
         type: DailyRepeatPeriod.WEEKLY,
-        value: selectedWeekDays
+        value: Array.isArray(activePattern.value) ? activePattern.value as WeeklyActiveDays : []
       };
-    } else if (repeatPeriod.id === DailyRepeatPeriod.MONTHLY) {
-      activePattern = {
+    } else if (repeatPeriod === DailyRepeatPeriod.MONTHLY) {
+      activePatternToSave = {
         type: DailyRepeatPeriod.MONTHLY,
-        value: selectedMonthDays
+        value: Array.isArray(activePattern.value) ? activePattern.value as MonthlyActiveDays : []
       };
     } else {
-      activePattern = {
+      activePatternToSave = {
         type: DailyRepeatPeriod.YEARLY,
-        value: selectedMonths
+        value: Array.isArray(activePattern.value) ? activePattern.value as YearlyActiveMonths : []
       };
     }
     
     // 过滤掉空的子任务
-    const filteredChecklist = checklist
+    const filteredSubtasks = subtasks
       .filter(item => item.title.trim())
       .map(item => ({
         title: item.title.trim(),
@@ -232,485 +361,444 @@ export default function DailyEditDialog({
     onSave({
       title: title.trim(),
       description: description.trim() || undefined,
-      checklist: filteredChecklist,
-      difficulty: difficulty.id,
-      start_date: startDate || today,
-      repeat_period: repeatPeriod.id,
-      active_pattern: activePattern,
-      tags
+      checklist: filteredSubtasks,
+      difficulty: difficulty,
+      start_date: startDate,
+      repeat_period: repeatPeriod,
+      active_pattern: activePatternToSave,
+      tags,
     });
     
     onClose();
   };
 
-  return (
-    <Transition.Root show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-50" onClose={onClose}>
-        <Transition.Child
-          as={Fragment}
-          enter="ease-out duration-300"
-          enterFrom="opacity-0"
-          enterTo="opacity-100"
-          leave="ease-in duration-200"
-          leaveFrom="opacity-100"
-          leaveTo="opacity-0"
-        >
-          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" />
-        </Transition.Child>
+  if (!isOpen || !mounted) return null;
 
-        <div className="fixed inset-0 z-10 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
-            <Transition.Child
-              as={Fragment}
-              enter="ease-out duration-300"
-              enterFrom="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-              enterTo="opacity-100 translate-y-0 sm:scale-100"
-              leave="ease-in duration-200"
-              leaveFrom="opacity-100 translate-y-0 sm:scale-100"
-              leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
-            >
-              <Dialog.Panel className="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 w-full max-w-2xl sm:p-6">
-                <div className="absolute right-0 top-0 pr-4 pt-4">
+  const dialog = (
+    <div className="fixed inset-0" style={{ 
+      position: 'fixed', 
+      top: 0, 
+      left: 0, 
+      width: '100vw', 
+      height: '100vh', 
+      zIndex: 99999,
+      isolation: 'isolate'
+    }}>
+      <style>{styles}</style>
+      {/* 背景蒙版 */}
+      <div 
+        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" 
+        style={{ zIndex: 99999 }}
+        onClick={onClose} 
+      />
+
+      {/* 弹窗内容 */}
+      <div className="fixed inset-0 flex items-center justify-center overflow-y-auto" style={{ zIndex: 100000 }}>
+        <div className="w-[90vw] sm:w-[80%] sm:max-w-lg bg-white rounded-lg shadow-xl relative my-6" style={{ zIndex: 100001, maxHeight: 'calc(100vh - 3rem)' }}>
+          <div className="flex justify-between items-center sticky top-0 bg-white rounded-t-lg px-4 pt-3 sm:px-6 sm:pt-4 pb-4 z-10">
+            <h2 className="text-xl sm:text-2xl font-semibold text-gray-900">编辑日常任务</h2>
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-2.5 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                form="dailyForm"
+                className="px-2.5 py-1.5 border border-transparent rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+
+          <form id="dailyForm" onSubmit={handleSubmit} className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 9rem)' }}>
+            <div className="space-y-2 sm:space-y-3 px-4 sm:px-6 pb-6">
+              {/* 标题 */}
+              <div className="px-3 py-2 sm:p-3">
+                <label htmlFor="title" className="block text-base font-medium text-gray-700 mb-1.5">
+                  标题 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="title"
+                  value={title}
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    setTitleError(false);
+                  }}
+                  placeholder="请添加日常任务标题"
+                  className={`block w-full h-12 sm:h-13 rounded-lg border ${
+                    titleError 
+                      ? 'shake-animation' 
+                      : 'border-gray-100'
+                  } bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-3 py-1.5`}
+                />
+              </div>
+
+              {/* 说明 */}
+              <div className="px-3 py-2 sm:p-3">
+                <label htmlFor="description" className="block text-base font-medium text-gray-700 mb-1.5">
+                  说明
+                </label>
+                <textarea
+                  id="description"
+                  rows={3}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="请添加日常任务说明"
+                  className="block w-full rounded-lg border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-3 py-2"
+                />
+              </div>
+
+              {/* 子任务清单 */}
+              <div className="px-3 py-2 sm:p-3">
+                <label htmlFor="checklist" className="block text-base font-medium text-gray-700 mb-1.5">
+                  子任务清单
+                </label>
+                <div className="space-y-2">
+                  {subtasks.map((item, index) => (
+                    <div key={index} className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        className="block flex-1 rounded-lg border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-3 py-2"
+                        value={item.title}
+                        onChange={(e) => updateSubtaskTitle(index, e.target.value)}
+                        placeholder={`子任务 ${index + 1}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeSubtask(index)}
+                        className="p-1.5 text-gray-500 hover:text-red-600"
+                      >
+                        <TrashIcon className="h-5 w-5" />
+                      </button>
+                    </div>
+                  ))}
                   <button
                     type="button"
-                    className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none"
-                    onClick={onClose}
+                    onClick={addSubtask}
+                    className="flex items-center text-sm text-indigo-600 hover:text-indigo-800"
                   >
-                    <span className="sr-only">关闭</span>
-                    <XMarkIcon className="h-6 w-6" aria-hidden="true" />
+                    <PlusIcon className="h-4 w-4 mr-1" />
+                    添加子任务
                   </button>
                 </div>
-                
-                <div className="sm:flex sm:items-start">
-                  <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left w-full">
-                    <Dialog.Title as="h3" className="text-lg font-semibold leading-6 text-gray-900">
-                      {initialData ? '编辑日常任务' : '新增日常任务'}
-                    </Dialog.Title>
-                    <div className="mt-4">
-                      <form onSubmit={handleSubmit} className="space-y-4">
-                        {/* 标题 */}
-                        <div>
-                          <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
-                            标题 *
-                          </label>
-                          <input
-                            type="text"
-                            id="title"
-                            className={`block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ${
-                              errors.title 
-                                ? 'ring-red-500 animate-pulse-red' 
-                                : 'ring-gray-300 focus:ring-indigo-600'
-                            } placeholder:text-gray-400 focus:ring-2 focus:ring-inset sm:text-sm sm:leading-6`}
-                            value={title}
-                            onChange={(e) => {
-                              setTitle(e.target.value);
-                              if (e.target.value.trim()) {
-                                setErrors((prev) => ({ ...prev, title: false }));
-                              }
-                            }}
-                            placeholder="输入日常任务标题"
-                          />
-                        </div>
-                        
-                        {/* 说明 */}
-                        <div>
-                          <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-                            说明
-                          </label>
-                          <textarea
-                            id="description"
-                            rows={3}
-                            className="block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="输入日常任务说明（选填）"
-                          />
-                        </div>
+              </div>
 
-                        {/* 子任务清单 */}
-                        <div>
-                          <label htmlFor="checklist" className="block text-sm font-medium text-gray-700 mb-1">
-                            子任务清单
-                          </label>
-                          <div className="space-y-2">
-                            {checklist.map((item, index) => (
-                              <div key={index} className="flex items-center space-x-2">
-                                <input
-                                  type="text"
-                                  className="block flex-1 rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                                  value={item.title}
-                                  onChange={(e) => updateChecklistItemTitle(index, e.target.value)}
-                                  placeholder={`子任务 ${index + 1}`}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => removeChecklistItem(index)}
-                                  className="p-1.5 text-gray-500 hover:text-red-600"
-                                >
-                                  <TrashIcon className="h-5 w-5" />
-                                </button>
-                              </div>
-                            ))}
-                            <button
-                              type="button"
-                              onClick={addChecklistItem}
-                              className="flex items-center text-sm text-indigo-600 hover:text-indigo-800"
-                            >
-                              <PlusIcon className="h-4 w-4 mr-1" />
-                              添加子任务
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* 难度 */}
-                        <div>
-                          <label htmlFor="difficulty" className="block text-sm font-medium text-gray-700 mb-1">
-                            难度 *
-                          </label>
-                          <Listbox value={difficulty} onChange={setDifficulty}>
-                            <div className="relative mt-1">
-                              <Listbox.Button className={`relative w-full cursor-default rounded-md bg-white py-1.5 pl-3 pr-10 text-left text-gray-900 shadow-sm ring-1 ring-inset ${
-                                errors.difficulty 
-                                  ? 'ring-red-500 animate-pulse-red' 
-                                  : 'ring-gray-300'
-                              } focus:outline-none focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6`}>
-                                <span className="block truncate">{difficulty.name}</span>
-                                <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-                                  <ChevronUpDownIcon
-                                    className="h-5 w-5 text-gray-400"
-                                    aria-hidden="true"
-                                  />
+              {/* 难度选择 */}
+              <div className="px-3 py-2 sm:p-3">
+                <label htmlFor="difficulty" className="block text-base font-medium text-gray-700 mb-1.5">
+                  难度
+                </label>
+                <Listbox value={difficulty} onChange={setDifficulty}>
+                  <div className="relative mt-1">
+                    <Listbox.Button className="relative w-full cursor-default rounded-lg border border-gray-100 bg-white py-2 pl-3 pr-10 text-left shadow-sm hover:shadow-md transition-shadow focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-sm">
+                      <span className="flex items-center">
+                        <span className="block truncate mr-2">{difficultyOptions.find(o => o.id === difficulty)?.name}</span>
+                        <DifficultyStarsDisplay difficulty={difficulty} />
+                      </span>
+                      <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+                        <ChevronUpDownIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                      </span>
+                    </Listbox.Button>
+                    <Transition
+                      as={Fragment}
+                      leave="transition ease-in duration-100"
+                      leaveFrom="opacity-100"
+                      leaveTo="opacity-0"
+                    >
+                      <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+                        {difficultyOptions.map((option) => (
+                          <Listbox.Option
+                            key={option.id}
+                            className={({ active }) =>
+                              `relative cursor-default select-none py-2 pl-10 pr-4 ${
+                                active ? 'bg-indigo-100 text-indigo-900' : 'text-gray-900'
+                              }`
+                            }
+                            value={option.id}
+                          >
+                            {({ selected }) => (
+                              <>
+                                <span className={`flex items-center ${selected ? 'font-medium' : 'font-normal'}`}>
+                                  <span className="mr-2">{option.name}</span>
+                                  <DifficultyStarsDisplay difficulty={option.id} />
                                 </span>
-                              </Listbox.Button>
-                              <Transition
-                                as={Fragment}
-                                leave="transition ease-in duration-100"
-                                leaveFrom="opacity-100"
-                                leaveTo="opacity-0"
-                              >
-                                <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
-                                  {difficultyOptions.map((option) => (
-                                    <Listbox.Option
-                                      key={option.id}
-                                      className={({ active }) =>
-                                        `relative cursor-default select-none py-2 pl-10 pr-4 ${
-                                          active ? 'bg-indigo-100 text-indigo-900' : 'text-gray-900'
-                                        }`
-                                      }
-                                      value={option}
-                                    >
-                                      {({ selected }) => (
-                                        <>
-                                          <span
-                                            className={`block truncate ${
-                                              selected ? 'font-medium' : 'font-normal'
-                                            }`}
-                                          >
-                                            {option.name}
-                                          </span>
-                                          {selected ? (
-                                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-600">
-                                              <CheckIcon className="h-5 w-5" aria-hidden="true" />
-                                            </span>
-                                          ) : null}
-                                        </>
-                                      )}
-                                    </Listbox.Option>
-                                  ))}
-                                </Listbox.Options>
-                              </Transition>
-                            </div>
-                          </Listbox>
-                        </div>
+                                {selected ? (
+                                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-600">
+                                    <CheckIcon className="h-5 w-5" aria-hidden="true" />
+                                  </span>
+                                ) : null}
+                              </>
+                            )}
+                          </Listbox.Option>
+                        ))}
+                      </Listbox.Options>
+                    </Transition>
+                  </div>
+                </Listbox>
+              </div>
 
-                        {/* 开始日期 */}
-                        <div>
-                          <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">
-                            开始日期 *
-                          </label>
-                          <input
-                            type="date"
-                            id="startDate"
-                            className="block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            min={today}
-                          />
-                        </div>
+              {/* 开始日期和重复周期 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* 开始日期 */}
+                <div className="px-3 py-2 sm:p-3">
+                  <label htmlFor="startDate" className="block text-base font-medium text-gray-700 mb-1.5">
+                    开始日期
+                  </label>
+                  <input
+                    type="date"
+                    id="startDate"
+                    className="block w-full rounded-lg border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-3 py-2"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                  />
+                </div>
 
-                        {/* 重复周期 */}
-                        <div>
-                          <label htmlFor="repeatPeriod" className="block text-sm font-medium text-gray-700 mb-1">
-                            重复周期 *
-                          </label>
-                          <Listbox 
-                            value={repeatPeriod} 
-                            onChange={(value) => {
-                              setRepeatPeriod(value);
-                              // 清除相关错误
-                              setErrors((prev) => ({
-                                ...prev,
-                                repeatPeriod: false,
-                                weekDays: false,
-                                monthDays: false,
-                                months: false
-                              }));
-                            }}
-                          >
-                            <div className="relative mt-1">
-                              <Listbox.Button className={`relative w-full cursor-default rounded-md bg-white py-1.5 pl-3 pr-10 text-left text-gray-900 shadow-sm ring-1 ring-inset ${
-                                errors.repeatPeriod 
-                                  ? 'ring-red-500 animate-pulse-red' 
-                                  : 'ring-gray-300'
-                              } focus:outline-none focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6`}>
-                                <span className="block truncate">{repeatPeriod.name}</span>
-                                <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
-                                  <ChevronUpDownIcon
-                                    className="h-5 w-5 text-gray-400"
-                                    aria-hidden="true"
-                                  />
-                                </span>
-                              </Listbox.Button>
-                              <Transition
-                                as={Fragment}
-                                leave="transition ease-in duration-100"
-                                leaveFrom="opacity-100"
-                                leaveTo="opacity-0"
-                              >
-                                <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
-                                  {repeatPeriodOptions.map((option) => (
-                                    <Listbox.Option
-                                      key={option.id}
-                                      className={({ active }) =>
-                                        `relative cursor-default select-none py-2 pl-10 pr-4 ${
-                                          active ? 'bg-indigo-100 text-indigo-900' : 'text-gray-900'
-                                        }`
-                                      }
-                                      value={option}
-                                    >
-                                      {({ selected }) => (
-                                        <>
-                                          <span
-                                            className={`block truncate ${
-                                              selected ? 'font-medium' : 'font-normal'
-                                            }`}
-                                          >
-                                            {option.name}
-                                          </span>
-                                          {selected ? (
-                                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-600">
-                                              <CheckIcon className="h-5 w-5" aria-hidden="true" />
-                                            </span>
-                                          ) : null}
-                                        </>
-                                      )}
-                                    </Listbox.Option>
-                                  ))}
-                                </Listbox.Options>
-                              </Transition>
-                            </div>
-                          </Listbox>
-                        </div>
+                {/* 重复周期 */}
+                <div className="px-3 py-2 sm:p-3">
+                  <label htmlFor="repeatPeriod" className="block text-base font-medium text-gray-700 mb-1.5">
+                    重复周期
+                  </label>
+                  <select
+                    id="repeatPeriod"
+                    value={repeatPeriod}
+                    onChange={(e) => {
+                      const selected = repeatPeriodOptions.find(
+                        option => option.id === e.target.value
+                      );
+                      if (selected) {
+                        handleRepeatPeriodChange(selected.id);
+                      }
+                    }}
+                    className={`block w-full rounded-lg border ${
+                      'border-gray-100'
+                    } bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-3 py-2`}
+                  >
+                    {repeatPeriodOptions.map((option) => (
+                      <option key={option.id} value={option.id}>{option.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
-                        {/* 周期频次 / 活跃方式（根据重复周期显示不同内容） */}
-                        {repeatPeriod.id === DailyRepeatPeriod.DAILY && (
-                          <div>
-                            <label htmlFor="dailyFrequency" className="block text-sm font-medium text-gray-700 mb-1">
-                              每日频次（1-24次）
-                            </label>
-                            <input
-                              type="number"
-                              id="dailyFrequency"
-                              className="block w-full rounded-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                              value={dailyFrequency}
-                              onChange={(e) => {
-                                const value = parseInt(e.target.value);
-                                setDailyFrequency(
-                                  isNaN(value) ? 1 : Math.min(24, Math.max(1, value))
-                                );
-                              }}
-                              min={1}
-                              max={24}
-                            />
-                          </div>
-                        )}
+              {/* 周期频次 / 活跃方式（根据重复周期显示不同内容） */}
+              {repeatPeriod === DailyRepeatPeriod.DAILY && (
+                <div className="px-3 py-2 sm:p-3">
+                  <label htmlFor="dailyFrequency" className="block text-base font-medium text-gray-700 mb-1.5">
+                    每日频率
+                  </label>
+                  <input
+                    type="number"
+                    id="dailyFrequency"
+                    className="block w-full rounded-lg border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-3 py-2"
+                    value={typeof activePattern.value === 'number' ? activePattern.value : 1}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value);
+                      setActivePattern({
+                        type: DailyRepeatPeriod.DAILY,
+                        value: isNaN(value) ? 1 : Math.min(24, Math.max(1, value))
+                      });
+                    }}
+                    min={1}
+                    max={24}
+                  />
+                </div>
+              )}
 
-                        {repeatPeriod.id === DailyRepeatPeriod.WEEKLY && (
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              每周哪几天 *
-                            </label>
-                            <div className={`flex flex-wrap gap-2 p-3 border rounded-md ${
-                              errors.weekDays ? 'border-red-500 animate-pulse-red' : 'border-gray-300'
-                            }`}>
-                              {weekDayOptions.map((day) => (
-                                <button
-                                  key={day.id}
-                                  type="button"
-                                  onClick={() => {
-                                    if (selectedWeekDays.includes(day.id)) {
-                                      setSelectedWeekDays(selectedWeekDays.filter(id => id !== day.id));
-                                    } else {
-                                      setSelectedWeekDays([...selectedWeekDays, day.id]);
-                                      // 清除错误
-                                      if (errors.weekDays) {
-                                        setErrors((prev) => ({ ...prev, weekDays: false }));
-                                      }
-                                    }
-                                  }}
-                                  className={`px-3 py-1 rounded-full text-sm ${
-                                    selectedWeekDays.includes(day.id)
-                                      ? 'bg-indigo-600 text-white'
-                                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                  }`}
-                                >
-                                  {day.name}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {repeatPeriod.id === DailyRepeatPeriod.MONTHLY && (
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              每月哪几天 *
-                            </label>
-                            <div className={`grid grid-cols-7 gap-2 p-3 border rounded-md ${
-                              errors.monthDays ? 'border-red-500 animate-pulse-red' : 'border-gray-300'
-                            }`}>
-                              {createMonthDayOptions().map((day) => (
-                                <button
-                                  key={day.id}
-                                  type="button"
-                                  onClick={() => {
-                                    if (selectedMonthDays.includes(day.id)) {
-                                      setSelectedMonthDays(selectedMonthDays.filter(id => id !== day.id));
-                                    } else {
-                                      setSelectedMonthDays([...selectedMonthDays, day.id]);
-                                      // 清除错误
-                                      if (errors.monthDays) {
-                                        setErrors((prev) => ({ ...prev, monthDays: false }));
-                                      }
-                                    }
-                                  }}
-                                  className={`px-1 py-1 rounded-full text-xs ${
-                                    selectedMonthDays.includes(day.id)
-                                      ? 'bg-indigo-600 text-white'
-                                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                  }`}
-                                >
-                                  {day.id}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {repeatPeriod.id === DailyRepeatPeriod.YEARLY && (
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
-                              每年哪几个月 *
-                            </label>
-                            <div className={`flex flex-wrap gap-2 p-3 border rounded-md ${
-                              errors.months ? 'border-red-500 animate-pulse-red' : 'border-gray-300'
-                            }`}>
-                              {monthOptions.map((month) => (
-                                <button
-                                  key={month.id}
-                                  type="button"
-                                  onClick={() => {
-                                    if (selectedMonths.includes(month.id)) {
-                                      setSelectedMonths(selectedMonths.filter(id => id !== month.id));
-                                    } else {
-                                      setSelectedMonths([...selectedMonths, month.id]);
-                                      // 清除错误
-                                      if (errors.months) {
-                                        setErrors((prev) => ({ ...prev, months: false }));
-                                      }
-                                    }
-                                  }}
-                                  className={`px-3 py-1 rounded-full text-sm ${
-                                    selectedMonths.includes(month.id)
-                                      ? 'bg-indigo-600 text-white'
-                                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                  }`}
-                                >
-                                  {month.name}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* 标签 */}
-                        <div>
-                          <label htmlFor="tags" className="block text-sm font-medium text-gray-700 mb-1">
-                            标签
-                          </label>
-                          <div className="flex flex-wrap gap-2 mb-2">
-                            {tags.map((tag, index) => (
-                              <div key={index} className="flex items-center bg-indigo-100 text-indigo-800 text-sm px-2 py-1 rounded">
-                                {tag}
-                                <button
-                                  type="button"
-                                  onClick={() => removeTag(tag)}
-                                  className="ml-1 text-indigo-500 hover:text-indigo-700"
-                                >
-                                  <XMarkIcon className="h-4 w-4" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                          <div className="flex">
-                            <input
-                              type="text"
-                              className="block flex-1 rounded-l-md border-0 py-1.5 px-3 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-                              value={newTag}
-                              onChange={(e) => setNewTag(e.target.value)}
-                              placeholder="输入标签"
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  addTag();
-                                }
-                              }}
-                            />
-                            <button
-                              type="button"
-                              onClick={addTag}
-                              disabled={!newTag.trim()}
-                              className="inline-flex items-center px-3 py-1.5 rounded-r-md border border-l-0 border-gray-300 bg-indigo-600 text-white hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                            >
-                              添加
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="mt-5 sm:mt-6 sm:grid sm:grid-flow-row-dense sm:grid-cols-2 sm:gap-3">
-                          <button
-                            type="submit"
-                            className="inline-flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:col-start-2"
-                          >
-                            保存
-                          </button>
-                          <button
-                            type="button"
-                            className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:col-start-1 sm:mt-0"
-                            onClick={onClose}
-                          >
-                            取消
-                          </button>
-                        </div>
-                      </form>
-                    </div>
+              {repeatPeriod === DailyRepeatPeriod.WEEKLY && (
+                <div className="px-3 py-2 sm:p-3">
+                  <label className="block text-base font-medium text-gray-700 mb-1.5">
+                    每周哪几天
+                  </label>
+                  <div className={`flex flex-wrap gap-2 p-3 border rounded-md ${'border-gray-100'}`}>
+                    {weekDayOptions.map((day) => {
+                      // 确保我们有一个数组来处理
+                      const currentValue = Array.isArray(activePattern.value) 
+                        ? activePattern.value as number[] 
+                        : [];
+                      
+                      return (
+                        <button
+                          key={day.id}
+                          type="button"
+                          onClick={() => {
+                            if (currentValue.includes(day.id)) {
+                              setActivePattern({
+                                type: DailyRepeatPeriod.WEEKLY,
+                                value: currentValue.filter((id) => id !== day.id) as WeeklyActiveDays
+                              });
+                            } else {
+                              setActivePattern({
+                                type: DailyRepeatPeriod.WEEKLY,
+                                value: [...currentValue, day.id] as WeeklyActiveDays
+                              });
+                            }
+                          }}
+                          className={`px-3 py-1 rounded-full text-sm ${
+                            currentValue.includes(day.id)
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {day.name}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-              </Dialog.Panel>
-            </Transition.Child>
-          </div>
+              )}
+
+              {/* 每月活跃日期选择 */}
+              {repeatPeriod === DailyRepeatPeriod.MONTHLY && (
+                <div className="px-3 py-2 sm:p-3">
+                  <label className="block text-base font-medium text-gray-700 mb-1.5">
+                    每月哪几天
+                  </label>
+                  <div className={`grid grid-cols-7 gap-2 p-3 border rounded-md ${'border-gray-100'}`}>
+                    {createMonthDayOptions().map((day) => {
+                      // 确保我们有一个数组来处理
+                      const currentValue = Array.isArray(activePattern.value) 
+                        ? activePattern.value as number[] 
+                        : [];
+                      
+                      return (
+                        <button
+                          key={day.id}
+                          type="button"
+                          onClick={() => {
+                            if (currentValue.includes(day.id)) {
+                              setActivePattern({
+                                type: DailyRepeatPeriod.MONTHLY,
+                                value: currentValue.filter((id) => id !== day.id) as MonthlyActiveDays
+                              });
+                            } else {
+                              setActivePattern({
+                                type: DailyRepeatPeriod.MONTHLY,
+                                value: [...currentValue, day.id] as MonthlyActiveDays
+                              });
+                            }
+                          }}
+                          className={`px-1 py-1 rounded-full text-xs ${
+                            currentValue.includes(day.id)
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {day.id}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 每年活跃月份选择 */}
+              {repeatPeriod === DailyRepeatPeriod.YEARLY && (
+                <div className="px-3 py-2 sm:p-3">
+                  <label className="block text-base font-medium text-gray-700 mb-1.5">
+                    每年哪几个月
+                  </label>
+                  <div className={`flex flex-wrap gap-2 p-3 border rounded-md ${'border-gray-100'}`}>
+                    {monthOptions.map((month) => {
+                      // 确保我们有一个数组来处理
+                      const currentValue = Array.isArray(activePattern.value) 
+                        ? activePattern.value as number[] 
+                        : [];
+                      
+                      return (
+                        <button
+                          key={month.id}
+                          type="button"
+                          onClick={() => {
+                            if (currentValue.includes(month.id)) {
+                              setActivePattern({
+                                type: DailyRepeatPeriod.YEARLY,
+                                value: currentValue.filter((id) => id !== month.id) as YearlyActiveMonths
+                              });
+                            } else {
+                              setActivePattern({
+                                type: DailyRepeatPeriod.YEARLY,
+                                value: [...currentValue, month.id] as YearlyActiveMonths
+                              });
+                            }
+                          }}
+                          className={`px-3 py-1 rounded-full text-sm ${
+                            currentValue.includes(month.id)
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {month.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 标签 - 使用下拉选择和自定义输入 */}
+              <div className="px-3 py-2 sm:p-3">
+                <label htmlFor="tags" className="block text-base font-medium text-gray-700 mb-1.5">
+                  标签
+                </label>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <div className="col-span-1 relative">
+                    <select
+                      onChange={handleTagChange}
+                      className="block w-full h-10 rounded-lg border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-3 py-2 pr-12 appearance-none truncate"
+                      aria-label="选择标签"
+                    >
+                      <option value="" className="truncate">选择标签</option>
+                      {predefinedTags.map((tag) => (
+                        <option key={tag} value={tag} className="truncate">{tag}</option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3">
+                      <ChevronDownIcon className="h-4 w-4 text-gray-400 flex-shrink-0" aria-hidden="true" />
+                    </div>
+                  </div>
+                  <div className="col-span-1">
+                    <input
+                      type="text"
+                      className="block w-full h-10 rounded-lg border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-3 py-2"
+                      value={customTag}
+                      onChange={handleCustomTagChange}
+                      placeholder="输入自定义标签"
+                      onKeyDown={handleKeyDown}
+                    />
+                  </div>
+                </div>
+                {tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {tags.map((tag, index) => (
+                      <div 
+                        key={index} 
+                        className="flex items-center border border-gray-200 text-gray-700 text-sm px-3 py-1 rounded-full transition-all hover:shadow-md hover:border-gray-300 hover:bg-gray-50"
+                      >
+                        {tag}
+                        <button
+                          type="button"
+                          onClick={() => removeTag(tag)}
+                          className="ml-1 text-gray-500 hover:text-red-500"
+                        >
+                          <XMarkIcon className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </form>
         </div>
-      </Dialog>
-    </Transition.Root>
+      </div>
+    </div>
   );
+  
+  return createPortal(dialog, document.body);
 } 

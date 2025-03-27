@@ -8,10 +8,11 @@ import HabitList from '@/components/habits/HabitList';
 import HabitEditDialog from '@/components/habits/HabitEditDialog';
 import DailyList from '@/components/dailies/DailyList';
 import DailyEditDialog from '@/components/dailies/DailyEditDialog';
+import DailyQuickAdd from '@/components/dailies/DailyQuickAdd';
 import { createHabit } from '@/services/habits';
 import { createDaily } from '@/services/dailies';
 import { CreateHabitRequest } from '@/types/habit';
-import { CreateDailyRequest } from '@/types/daily';
+import { CreateDailyRequest, Daily, DailyDifficulty, DailyRepeatPeriod } from '@/types/daily';
 import { toast } from 'react-hot-toast';
 
 export default function TasksPage() {
@@ -37,18 +38,57 @@ export default function TasksPage() {
     }
   };
 
-  const handleSaveDaily = async (dailyData: CreateDailyRequest) => {
+  const handleSaveDaily = async (dailyData: CreateDailyRequest | Partial<Daily>) => {
     try {
-      await createDaily(dailyData);
+      // 类型检查，确保数据符合CreateDailyRequest类型
+      console.log('准备创建日常任务:', JSON.stringify(dailyData, null, 2));
+      if ('id' in dailyData) {
+        // 如果包含id字段，说明是编辑现有任务，这里仅处理新建
+        console.error('提供了ID，但这是创建操作');
+        toast.error('操作失败：无法创建已有ID的任务');
+        return;
+      }
+      await createDaily(dailyData as CreateDailyRequest);
       setIsDailyDialogOpen(false);
       toast.success('日常任务创建成功！');
       // 刷新日常任务列表
       if (dailyListRef.current) {
         await dailyListRef.current.loadDailies();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('创建日常任务失败:', error);
-      toast.error('创建日常任务失败，请重试');
+      console.error('错误详情:', error.message || '未知错误');
+      if (error.details) {
+        console.error('错误详情:', error.details);
+      }
+      toast.error(`创建日常任务失败: ${error.message || '请重试'}`);
+    }
+  };
+
+  const handleQuickAddDaily = async (title: string) => {
+    try {
+      // 使用默认值创建日常任务
+      const today = new Date().toISOString().split('T')[0];
+      const dailyData: CreateDailyRequest = {
+        title,
+        description: '',
+        difficulty: DailyDifficulty.MEDIUM, // 使用枚举类型
+        start_date: today,
+        repeat_period: DailyRepeatPeriod.DAILY, // 使用枚举类型
+        active_pattern: { type: DailyRepeatPeriod.DAILY, value: 1 }, // 默认每日执行1次
+        tags: []
+      };
+      
+      await createDaily(dailyData);
+      toast.success('日常任务创建成功！');
+      
+      // 刷新日常任务列表
+      if (dailyListRef.current) {
+        await dailyListRef.current.loadDailies();
+      }
+    } catch (error: any) {
+      console.error('快速创建日常任务失败:', error);
+      toast.error(`创建失败: ${error.message || '请重试'}`);
     }
   };
 
@@ -82,6 +122,7 @@ export default function TasksPage() {
                   添加
                 </button>
               </div>
+              <DailyQuickAdd onAdd={handleQuickAddDaily} />
               <DailyList ref={dailyListRef} />
             </div>
 
@@ -100,6 +141,7 @@ export default function TasksPage() {
         </div>
       </div>
 
+      {/* 对话框放在顶层，确保全屏覆盖 */}
       <HabitEditDialog
         isOpen={isHabitDialogOpen}
         onClose={() => setIsHabitDialogOpen(false)}

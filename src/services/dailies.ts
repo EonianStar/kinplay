@@ -93,27 +93,45 @@ export async function getDaily(dailyId: string): Promise<Daily | null> {
 // 创建日常任务
 export async function createDaily(dailyData: CreateDailyRequest): Promise<Daily> {
   try {
+    // 记录创建参数
+    console.log('创建日常任务数据:', JSON.stringify(dailyData, null, 2));
+    
     const { data: authData, error: authError } = await supabase.auth.getSession();
     if (authError || !authData.session) {
+      console.error('认证错误:', authError);
       throw new Error('用户未登录');
     }
 
     const userId = authData.session.user.id;
+    console.log('当前用户ID:', userId);
+
+    // 确保必填字段存在
+    if (!dailyData.title || !dailyData.difficulty || !dailyData.repeat_period || !dailyData.active_pattern) {
+      console.error('缺少必填字段:', { 
+        hasTitle: !!dailyData.title, 
+        hasDifficulty: !!dailyData.difficulty, 
+        hasRepeatPeriod: !!dailyData.repeat_period, 
+        hasActivePattern: !!dailyData.active_pattern 
+      });
+      throw new Error('缺少必填字段');
+    }
 
     // 处理数据
     const newDaily = {
       user_id: userId,
       title: dailyData.title.trim(),
-      description: dailyData.description?.trim() || undefined,
+      description: dailyData.description?.trim() || null,
       difficulty: dailyData.difficulty,
       start_date: dailyData.start_date,
       repeat_period: dailyData.repeat_period,
       active_pattern: dailyData.active_pattern,
-      streak_count: 0,
+      streak_count: dailyData.streak_count || 0,
       tags: dailyData.tags?.filter(Boolean) || [],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
+
+    console.log('准备插入数据库的日常任务数据:', JSON.stringify(newDaily, null, 2));
 
     // 创建日常任务
     const { data: daily, error } = await supabase
@@ -123,36 +141,46 @@ export async function createDaily(dailyData: CreateDailyRequest): Promise<Daily>
       .single();
 
     if (error) {
-      console.error('创建日常任务失败:', error);
+      console.error('创建日常任务数据库错误:', error);
       throw error;
     }
+
+    console.log('创建的日常任务:', daily);
 
     // 创建子任务
     let checklist: DailyTask[] = [];
     if (dailyData.checklist && dailyData.checklist.length > 0) {
-      const checklistItems = dailyData.checklist.map(item => ({
-        daily_id: daily.id,
-        title: item.title.trim(),
-        completed: item.completed || false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }));
+      // 过滤掉标题为空的子任务
+      const validChecklistItems = dailyData.checklist
+        .filter(item => item.title && item.title.trim())
+        .map(item => ({
+          daily_id: daily.id,
+          title: item.title.trim(),
+          completed: item.completed || false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }));
 
-      const { data: checklistData, error: checklistError } = await supabase
-        .from('daily_tasks')
-        .insert(checklistItems)
-        .select();
+      if (validChecklistItems.length > 0) {
+        console.log('准备插入的子任务:', validChecklistItems);
+        
+        const { data: checklistData, error: checklistError } = await supabase
+          .from('daily_tasks')
+          .insert(validChecklistItems)
+          .select();
 
-      if (checklistError) {
-        console.error('创建子任务失败:', checklistError);
-      } else {
-        checklist = checklistData;
+        if (checklistError) {
+          console.error('创建子任务失败:', checklistError);
+        } else {
+          checklist = checklistData || [];
+          console.log('创建的子任务:', checklist);
+        }
       }
     }
 
     return { ...daily, checklist };
   } catch (error) {
-    console.error('创建日常任务失败:', error);
+    console.error('创建日常任务过程中发生错误:', error);
     throw error;
   }
 }

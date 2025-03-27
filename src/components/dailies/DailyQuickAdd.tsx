@@ -6,37 +6,41 @@ import DailyEditDialog from './DailyEditDialog';
 import { CreateDailyRequest } from '@/types/daily';
 
 interface DailyQuickAddProps {
-  onDailyCreated: (dailyData: CreateDailyRequest) => void;
+  onAdd: (title: string) => void;
 }
 
-export default function DailyQuickAdd({ onDailyCreated }: DailyQuickAddProps) {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+export default function DailyQuickAdd({ onAdd }: DailyQuickAddProps) {
+  const [title, setTitle] = useState('');
 
-  const handleOpenDialog = () => {
-    setIsDialogOpen(true);
-  };
-
-  const handleSaveDaily = (dailyData: CreateDailyRequest) => {
-    onDailyCreated(dailyData);
-    setIsDialogOpen(false);
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (title.trim()) {
+      onAdd(title.trim());
+      setTitle('');
+    }
   };
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={handleOpenDialog}
-        className="w-full flex items-center justify-center py-2 px-4 border border-dashed border-gray-300 rounded-md text-sm text-gray-700 hover:border-indigo-500 hover:text-indigo-500"
-      >
-        <PlusIcon className="h-5 w-5 mr-2" />
-        <span>添加日常任务</span>
-      </button>
-
-      <DailyEditDialog
-        isOpen={isDialogOpen}
-        onClose={() => setIsDialogOpen(false)}
-        onSave={handleSaveDaily}
-      />
-    </>
+    <form onSubmit={handleSubmit} className="mb-3">
+      <div className="relative group">
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="添加一个日常任务"
+          className="w-full h-14 px-4 rounded-lg border border-gray-100 bg-white shadow-sm group-hover:shadow-md transition-all focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-base placeholder-gray-400"
+          autoComplete="off"
+        />
+        <button
+          type="submit"
+          className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full bg-indigo-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ display: title.trim() ? 'flex' : 'none' }}
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+        </button>
+      </div>
+    </form>
   );
 } 

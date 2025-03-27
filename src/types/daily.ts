@@ -62,6 +62,7 @@ export interface CreateDailyRequest {
   repeat_period: DailyRepeatPeriod;
   active_pattern: ActivePattern;
   tags?: string[];
+  streak_count?: number;
 }
 
 // 更新日常任务的请求类型
