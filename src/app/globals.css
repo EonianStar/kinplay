@@ -7,3 +7,16 @@
     @apply min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50;
   }
 }
+
+@keyframes pulse-red {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.4);
+  }
+}
+
+.animate-pulse-red {
+  animation: pulse-red 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
