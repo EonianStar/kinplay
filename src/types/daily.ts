@@ -40,6 +40,7 @@ export interface Daily {
   tags: string[];
   created_at: string;
   updated_at: string;
+  value_level?: number; // 价值权重等级（-4到4的整数，默认为0）
 }
 
 // 日常任务的子任务
@@ -77,4 +78,5 @@ export interface UpdateDailyRequest {
   active_pattern?: ActivePattern;
   streak_count?: number;
   tags?: string[];
+  value_level?: number; // 价值权重等级
 } 

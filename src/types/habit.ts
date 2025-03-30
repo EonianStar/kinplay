@@ -46,6 +46,7 @@ export interface Habit {
   bad_count: number;
   created_at: string;
   updated_at: string;
+  value_level?: number; // 价值权重等级（-4到4的整数，默认为0）
 }
 
 // 创建习惯请求接口
@@ -58,7 +59,10 @@ export interface CreateHabitRequest {
   reset_period: HabitResetPeriod;
   good_count: number;
   bad_count: number;
+  value_level?: number; // 价值权重等级
 }
 
 // 更新习惯请求体
-export type UpdateHabitRequest = Partial<CreateHabitRequest>; 
+export interface UpdateHabitRequest extends Partial<CreateHabitRequest> {
+  value_level?: number; // 价值权重等级
+} 

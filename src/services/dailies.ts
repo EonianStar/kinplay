@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { Daily, CreateDailyRequest, UpdateDailyRequest, DailyTask } from '@/types/daily';
+import { ValueLevel, increaseValueLevel, decreaseValueLevel } from '@/utils/valueLevel';
 
 // 获取当前用户的所有日常任务
 export async function getDailies(): Promise<Daily[]> {
@@ -16,6 +17,7 @@ export async function getDailies(): Promise<Daily[]> {
       .from('dailies')
       .select('*')
       .eq('user_id', userId)
+      .order('sort_order', { ascending: true })
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -376,7 +378,7 @@ export async function updateDailyStreak(dailyId: string, increment: boolean): Pr
     // 获取当前日常任务
     const { data: daily, error: getError } = await supabase
       .from('dailies')
-      .select('streak_count')
+      .select('streak_count, value_level')
       .eq('id', dailyId)
       .eq('user_id', userId)
       .single();
@@ -390,12 +392,40 @@ export async function updateDailyStreak(dailyId: string, increment: boolean): Pr
     const newStreakCount = increment 
       ? Math.min(999, (daily.streak_count || 0) + 1) // 增加连击，最大999
       : 0; // 重置连击
+    
+    // 计算新的价值权重等级
+    const currentValueLevel = daily.value_level || 0;
+    // 如果是增加连击（完成任务），则提高价值权重等级；如果是重置连击（未完成），则降低价值权重等级
+    const newValueLevel = increment 
+      ? increaseValueLevel(currentValueLevel) // 提高一档
+      : decreaseValueLevel(currentValueLevel); // 降低一档
+    
+    console.log(`日常任务 ID: ${dailyId} 价值权重等级从 ${currentValueLevel} 变为 ${newValueLevel}`);
 
-    // 更新连击次数
+    // 如果是标记完成，添加完成记录
+    if (increment) {
+      try {
+        // 添加完成记录
+        await supabase
+          .from('daily_completions')
+          .insert({
+            daily_id: dailyId,
+            user_id: userId,
+            completed_at: new Date().toISOString(),
+            created_at: new Date().toISOString()
+          });
+      } catch (error) {
+        console.error('添加日常任务完成记录失败:', error);
+        // 继续处理，不影响主流程
+      }
+    }
+
+    // 更新连击次数和价值权重等级
     const { data: updatedDaily, error } = await supabase
       .from('dailies')
       .update({ 
         streak_count: newStreakCount,
+        value_level: newValueLevel,
         updated_at: new Date().toISOString()
       })
       .eq('id', dailyId)
@@ -459,6 +489,53 @@ export async function toggleDailyTask(taskId: string, completed: boolean): Promi
     return updatedTask;
   } catch (error) {
     console.error('更新子任务状态失败:', error);
+    throw error;
+  }
+}
+
+// 更新日常任务的排序顺序
+export async function updateDailiesOrder(dailyIds: string[]): Promise<boolean> {
+  try {
+    const { data: authData, error: authError } = await supabase.auth.getSession();
+    if (authError || !authData.session) {
+      throw new Error('用户未登录');
+    }
+
+    const userId = authData.session.user.id;
+
+    // 确保所有ID都是有效的并且属于当前用户
+    const { data: dailies, error: checkError } = await supabase
+      .from('dailies')
+      .select('id')
+      .eq('user_id', userId)
+      .in('id', dailyIds);
+
+    if (checkError) {
+      console.error('验证日常任务ID失败:', checkError);
+      throw checkError;
+    }
+
+    // 确保所有提供的ID都有效
+    if (dailies.length !== dailyIds.length) {
+      console.error('无效的日常任务ID或任务不属于当前用户');
+      throw new Error('无效的日常任务ID或任务不属于当前用户');
+    }
+
+    // 更新每个日常任务的顺序
+    const updates = dailyIds.map((id, index) => {
+      return supabase
+        .from('dailies')
+        .update({ sort_order: index })
+        .eq('id', id)
+        .eq('user_id', userId);
+    });
+
+    // 执行所有更新
+    await Promise.all(updates);
+    
+    return true;
+  } catch (error) {
+    console.error('更新日常任务顺序失败:', error);
     throw error;
   }
 } 

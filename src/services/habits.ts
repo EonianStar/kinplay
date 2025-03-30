@@ -7,6 +7,7 @@ import {
   HabitDifficulty,
   HabitResetPeriod
 } from '@/types/habit';
+import { ValueLevel, increaseValueLevel, decreaseValueLevel } from '@/utils/valueLevel';
 
 export async function getHabits(): Promise<Habit[]> {
   const {
@@ -21,6 +22,7 @@ export async function getHabits(): Promise<Habit[]> {
     .from('habits')
     .select('*')
     .eq('user_id', user.id)
+    .order('sort_order', { ascending: true })
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -181,10 +183,10 @@ export async function deleteHabit(id: number): Promise<void> {
 }
 
 export async function incrementGoodCount(id: number): Promise<void> {
-  // 先获取当前计数
+  // 先获取当前习惯信息
   const { data: habit, error: fetchError } = await supabase
     .from('habits')
-    .select('good_count')
+    .select('good_count, value_level, nature')
     .eq('id', id)
     .single();
 
@@ -193,10 +195,26 @@ export async function incrementGoodCount(id: number): Promise<void> {
     throw fetchError;
   }
 
-  // 更新计数
+  // 检查习惯是否包含好习惯性质
+  if (!habit.nature.includes(HabitNature.GOOD)) {
+    console.error('该习惯不是好习惯，无法增加好习惯计数');
+    throw new Error('该习惯不是好习惯，无法增加好习惯计数');
+  }
+
+  // 计算新的价值权重等级 - 完成好习惯应提高价值权重等级
+  const currentValueLevel = habit.value_level || 0;
+  const newValueLevel = increaseValueLevel(currentValueLevel);
+  
+  console.log(`习惯 ID: ${id} 价值权重等级从 ${currentValueLevel} 变为 ${newValueLevel} (完成好习惯)`);
+
+  // 更新计数和价值权重等级
   const { error: updateError } = await supabase
     .from('habits')
-    .update({ good_count: (habit?.good_count || 0) + 1 })
+    .update({ 
+      good_count: (habit?.good_count || 0) + 1,
+      value_level: newValueLevel,
+      updated_at: new Date().toISOString()
+    })
     .eq('id', id);
 
   if (updateError) {
@@ -206,10 +224,10 @@ export async function incrementGoodCount(id: number): Promise<void> {
 }
 
 export async function incrementBadCount(id: number): Promise<void> {
-  // 先获取当前计数
+  // 先获取当前习惯信息
   const { data: habit, error: fetchError } = await supabase
     .from('habits')
-    .select('bad_count')
+    .select('bad_count, value_level, nature')
     .eq('id', id)
     .single();
 
@@ -218,10 +236,26 @@ export async function incrementBadCount(id: number): Promise<void> {
     throw fetchError;
   }
 
-  // 更新计数
+  // 检查习惯是否包含坏习惯性质
+  if (!habit.nature.includes(HabitNature.BAD)) {
+    console.error('该习惯不是坏习惯，无法增加坏习惯计数');
+    throw new Error('该习惯不是坏习惯，无法增加坏习惯计数');
+  }
+
+  // 计算新的价值权重等级 - 记录坏习惯应降低价值权重等级
+  const currentValueLevel = habit.value_level || 0;
+  const newValueLevel = decreaseValueLevel(currentValueLevel);
+  
+  console.log(`习惯 ID: ${id} 价值权重等级从 ${currentValueLevel} 变为 ${newValueLevel} (记录坏习惯)`);
+
+  // 更新计数和价值权重等级
   const { error: updateError } = await supabase
     .from('habits')
-    .update({ bad_count: (habit?.bad_count || 0) + 1 })
+    .update({ 
+      bad_count: (habit?.bad_count || 0) + 1,
+      value_level: newValueLevel,
+      updated_at: new Date().toISOString()
+    })
     .eq('id', id);
 
   if (updateError) {
@@ -235,6 +269,54 @@ export async function resetHabitCounts(id: string): Promise<void> {
 
   if (error) {
     console.error('Error resetting habit counts:', error);
+    throw error;
+  }
+}
+
+export async function updateHabitsOrder(habitIds: number[]): Promise<boolean> {
+  try {
+    // 验证用户登录状态
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Error('用户未登录');
+    }
+
+    // 确保所有ID都是有效的并且属于当前用户
+    const { data: habits, error: checkError } = await supabase
+      .from('habits')
+      .select('id')
+      .eq('user_id', user.id)
+      .in('id', habitIds);
+
+    if (checkError) {
+      console.error('验证习惯ID失败:', checkError);
+      throw checkError;
+    }
+
+    // 确保所有提供的ID都有效
+    if (habits.length !== habitIds.length) {
+      console.error('无效的习惯ID或习惯不属于当前用户');
+      throw new Error('无效的习惯ID或习惯不属于当前用户');
+    }
+
+    // 更新每个习惯的顺序
+    const updates = habitIds.map((id, index) => {
+      return supabase
+        .from('habits')
+        .update({ sort_order: index })
+        .eq('id', id)
+        .eq('user_id', user.id);
+    });
+
+    // 执行所有更新
+    await Promise.all(updates);
+    
+    return true;
+  } catch (error) {
+    console.error('更新习惯顺序失败:', error);
     throw error;
   }
 } 

@@ -4,6 +4,7 @@ import { Inter } from 'next/font/google';
 import { AuthProvider } from '@/contexts/AuthContext';
 import Navbar from '@/components/layout/Navbar';
 import { Toaster } from 'react-hot-toast';
+import OverdueChecker from '@/components/OverdueChecker';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -24,6 +25,7 @@ export default function RootLayout({
           <Navbar />
           {children}
           <Toaster />
+          <OverdueChecker />
         </AuthProvider>
       </body>
     </html>

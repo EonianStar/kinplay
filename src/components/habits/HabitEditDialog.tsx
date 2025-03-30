@@ -212,7 +212,7 @@ export default function HabitEditDialog({ isOpen = true, habit, onClose, onSave 
       <div className="fixed inset-0 flex items-center justify-center overflow-y-auto" style={{ zIndex: 100000 }}>
         <div className="w-[90vw] sm:w-[80%] sm:max-w-lg bg-white rounded-lg shadow-xl relative my-6" style={{ zIndex: 100001, maxHeight: 'calc(100vh - 3rem)' }}>
           <div className="flex justify-between items-center sticky top-0 bg-white rounded-t-lg px-4 pt-3 sm:px-6 sm:pt-4 pb-4 z-10">
-            <h2 className="text-xl sm:text-2xl font-semibold text-gray-900">编辑习惯</h2>
+            <h2 className="text-xl sm:text-2xl font-semibold text-gray-900">{habit ? '编辑习惯' : '新建习惯'}</h2>
             <div className="flex items-center space-x-2 sm:space-x-3">
               <button
                 type="button"
@@ -431,107 +431,69 @@ export default function HabitEditDialog({ isOpen = true, habit, onClose, onSave 
                 </div>
               </div>
 
-              {/* 更多设置 - 折叠面板 */}
-              <div className="overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setIsExpanded(!isExpanded)}
-                  className="w-full px-3 py-2.5 text-left flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition-colors border-t border-b border-gray-200"
-                >
-                  <span className="text-sm text-gray-600">更多设置</span>
-                  <svg
-                    className={`w-5 h-5 text-gray-400 transform transition-transform duration-200 ${
-                      isExpanded ? 'rotate-180' : ''
-                    }`}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
+              {/* 更多设置 - 折叠面板，只在编辑模式下显示 */}
+              {habit && (
+                <div className="overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="w-full px-3 py-2.5 text-left flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition-colors border-t border-b border-gray-200"
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-                
-                {/* 修正计数部分 */}
-                {isExpanded && (
-                  <div className="px-3 py-2 sm:p-3 bg-white">
-                    <div className="mb-2">
-                      <label className="block text-base font-medium text-gray-700">
-                        修正计数
-                      </label>
-                    </div>
-                    <div className="flex gap-4">
-                      <div className="flex items-center space-x-2 flex-1">
-                        <span className="text-2xl sm:text-3xl font-semibold text-[#5DBEAC]">+</span>
-                        <div className="relative flex-1">
-                          <input
-                            type="number"
-                            id="goodCount"
-                            value={goodCount}
-                            onChange={(e) => setGoodCount(Math.min(999, Math.max(0, parseInt(e.target.value) || 0)))}
-                            min="0"
-                            max="999"
-                            className="block w-full h-12 sm:h-13 rounded-lg border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-2.5 py-1.5 pr-12"
-                          />
-                          <div className="absolute inset-y-0 right-0 flex flex-col border-l border-gray-300">
-                            <button
-                              type="button"
-                              onClick={() => setGoodCount(prev => Math.min(999, prev + 1))}
-                              className="flex-1 px-3 hover:bg-gray-100 text-gray-600 flex items-center justify-center border-b border-gray-300"
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setGoodCount(prev => Math.max(0, prev - 1))}
-                              className="flex-1 px-3 hover:bg-gray-100 text-gray-600 flex items-center justify-center"
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </button>
+                    <span className="text-sm text-gray-600">更多设置</span>
+                    <svg
+                      className={`w-5 h-5 text-gray-400 transform transition-transform duration-200 ${
+                        isExpanded ? 'rotate-180' : ''
+                      }`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  
+                  {/* 修正计数部分 */}
+                  {isExpanded && (
+                    <div className="px-3 py-2 sm:p-3 space-y-3">
+                      <div>
+                        <label htmlFor="counts" className="block text-base font-medium text-gray-700 mb-1.5">
+                          计数
+                        </label>
+                        <div className="flex space-x-4">
+                          <div className="flex items-center space-x-2 flex-1">
+                            <span className="text-2xl sm:text-3xl font-semibold text-[#66BB6A]">+</span>
+                            <div className="relative flex-1">
+                              <input
+                                type="number"
+                                id="goodCount"
+                                value={goodCount}
+                                onChange={(e) => setGoodCount(Math.min(999, Math.max(0, parseInt(e.target.value) || 0)))}
+                                min="0"
+                                max="999"
+                                className="block w-full h-12 sm:h-13 rounded-lg border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-2.5 py-1.5"
+                              />
+                            </div>
                           </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2 flex-1">
-                        <span className="text-2xl sm:text-3xl font-semibold text-[#D81B60]">-</span>
-                        <div className="relative flex-1">
-                          <input
-                            type="number"
-                            id="badCount"
-                            value={badCount}
-                            onChange={(e) => setBadCount(Math.min(999, Math.max(0, parseInt(e.target.value) || 0)))}
-                            min="0"
-                            max="999"
-                            className="block w-full h-12 sm:h-13 rounded-lg border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-2.5 py-1.5 pr-12"
-                          />
-                          <div className="absolute inset-y-0 right-0 flex flex-col border-l border-gray-300">
-                            <button
-                              type="button"
-                              onClick={() => setBadCount(prev => Math.min(999, prev + 1))}
-                              className="flex-1 px-3 hover:bg-gray-100 text-gray-600 flex items-center justify-center border-b border-gray-300"
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setBadCount(prev => Math.max(0, prev - 1))}
-                              className="flex-1 px-3 hover:bg-gray-100 text-gray-600 flex items-center justify-center"
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </button>
+                          <div className="flex items-center space-x-2 flex-1">
+                            <span className="text-2xl sm:text-3xl font-semibold text-[#D81B60]">-</span>
+                            <div className="relative flex-1">
+                              <input
+                                type="number"
+                                id="badCount"
+                                value={badCount}
+                                onChange={(e) => setBadCount(Math.min(999, Math.max(0, parseInt(e.target.value) || 0)))}
+                                min="0"
+                                max="999"
+                                className="block w-full h-12 sm:h-13 rounded-lg border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-2.5 py-1.5"
+                              />
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
             </div>
           </form>
         </div>

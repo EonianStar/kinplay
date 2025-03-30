@@ -124,10 +124,16 @@ export default function DailyEditDialog({
   // 状态定义
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [difficulty, setDifficulty] = useState<DailyDifficulty>(DailyDifficulty.MEDIUM);
+  const [difficulty, setDifficulty] = useState<DailyDifficulty>(DailyDifficulty.EASY);
   const [repeatPeriod, setRepeatPeriod] = useState<DailyRepeatPeriod>(DailyRepeatPeriod.DAILY);
   const [activePattern, setActivePattern] = useState<ActivePattern>({ type: DailyRepeatPeriod.DAILY, value: 1 });
-  const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState<string>(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
   const [tags, setTags] = useState<string[]>([]);
   const [customTag, setCustomTag] = useState('');
   const [subtasks, setSubtasks] = useState<{ id?: string; title: string; completed: boolean }[]>([]);
@@ -138,6 +144,9 @@ export default function DailyEditDialog({
   
   // 控制弹窗挂载状态
   const [mounted, setMounted] = useState(false);
+  
+  const [streakCount, setStreakCount] = useState<number>(0);
+  const [isExpanded, setIsExpanded] = useState(false);
   
   useEffect(() => {
     setMounted(true);
@@ -151,8 +160,20 @@ export default function DailyEditDialog({
       setTitle(initialData.title || '');
       setDescription(initialData.description || '');
       setSubtasks(initialData.checklist || []);
-      setDifficulty(initialData.difficulty || DailyDifficulty.MEDIUM);
-      setStartDate(initialData.start_date || new Date().toISOString().split('T')[0]);
+      setDifficulty(initialData.difficulty || DailyDifficulty.EASY);
+      
+      // 确保使用本地日期，而不是直接使用ISO字符串格式
+      if (initialData.start_date) {
+        setStartDate(initialData.start_date);
+      } else {
+        // 使用本地时区的今天日期
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        setStartDate(`${year}-${month}-${day}`);
+      }
+      
       setRepeatPeriod(initialData.repeat_period || DailyRepeatPeriod.DAILY);
       
       // 添加调试日志
@@ -180,6 +201,7 @@ export default function DailyEditDialog({
       }
       
       setTags(initialData.tags || []);
+      setStreakCount(initialData.streak_count || 0);
     } else {
       // 重置表单
       resetForm();
@@ -193,13 +215,19 @@ export default function DailyEditDialog({
     setTitleError(false);
     setDescription('');
     setSubtasks([]);
-    setDifficulty(DailyDifficulty.MEDIUM);
-    setStartDate(new Date().toISOString().split('T')[0]);
+    setDifficulty(DailyDifficulty.EASY);
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    setStartDate(`${year}-${month}-${day}`);
     setRepeatPeriod(DailyRepeatPeriod.DAILY);
     setActivePattern({ type: DailyRepeatPeriod.DAILY, value: 1 });
     setTags([]);
     setCustomTag('');
     setNewSubtask('');
+    setStreakCount(0);
+    setIsExpanded(false);
   };
 
   // 添加新的子任务
@@ -272,8 +300,8 @@ export default function DailyEditDialog({
     }
   };
 
-  // 提交表单
-  const handleSubmit = (e: React.FormEvent) => {
+  // 处理表单提交
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     let hasError = false;
     
@@ -357,17 +385,43 @@ export default function DailyEditDialog({
         completed: item.completed || false
       }));
     
-    // 提交数据
-    onSave({
-      title: title.trim(),
-      description: description.trim() || undefined,
-      checklist: filteredSubtasks,
-      difficulty: difficulty,
-      start_date: startDate,
-      repeat_period: repeatPeriod,
-      active_pattern: activePatternToSave,
-      tags,
-    });
+    if (initialData?.id) {
+      // 编辑现有日常任务
+      const editData: Partial<Daily> = {
+        id: initialData.id,
+        title: title.trim(),
+        description: description.trim() || undefined,
+        difficulty: difficulty as DailyDifficulty,
+        start_date: startDate,
+        repeat_period: repeatPeriod as DailyRepeatPeriod,
+        active_pattern: activePatternToSave,
+        tags,
+        streak_count: streakCount,
+        checklist: subtasks.length > 0 ? subtasks.map(task => ({
+          ...task,
+          title: task.title.trim()
+        })) : undefined
+      };
+      
+      onSave(editData);
+    } else {
+      // 创建新的日常任务
+      const newDaily: CreateDailyRequest = {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        difficulty: difficulty as DailyDifficulty,
+        start_date: startDate,
+        repeat_period: repeatPeriod as DailyRepeatPeriod,
+        active_pattern: activePatternToSave,
+        tags,
+        checklist: subtasks.length > 0 ? subtasks.map(task => ({
+          title: task.title.trim(),
+          completed: task.completed
+        })) : undefined
+      };
+      
+      onSave(newDaily);
+    }
     
     onClose();
   };
@@ -395,8 +449,10 @@ export default function DailyEditDialog({
       {/* 弹窗内容 */}
       <div className="fixed inset-0 flex items-center justify-center overflow-y-auto" style={{ zIndex: 100000 }}>
         <div className="w-[90vw] sm:w-[80%] sm:max-w-lg bg-white rounded-lg shadow-xl relative my-6" style={{ zIndex: 100001, maxHeight: 'calc(100vh - 3rem)' }}>
-          <div className="flex justify-between items-center sticky top-0 bg-white rounded-t-lg px-4 pt-3 sm:px-6 sm:pt-4 pb-4 z-10">
-            <h2 className="text-xl sm:text-2xl font-semibold text-gray-900">编辑日常任务</h2>
+          <div className="flex justify-between items-center sticky top-0 bg-white rounded-t-lg px-4 pt-3 sm:px-6 sm:pt-4 pb-3 z-10">
+            <h2 className="text-xl sm:text-2xl font-semibold text-gray-900">
+              {initialData?.id ? '编辑日常' : '新建日常'}
+            </h2>
             <div className="flex items-center space-x-2 sm:space-x-3">
               <button
                 type="button"
@@ -556,6 +612,7 @@ export default function DailyEditDialog({
                     className="block w-full rounded-lg border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-3 py-2"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
                   />
                 </div>
 
@@ -793,6 +850,50 @@ export default function DailyEditDialog({
                   </div>
                 )}
               </div>
+
+              {/* 更多设置 - 只在编辑模式下显示 */}
+              {initialData?.id && (
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="w-full px-3 py-2.5 text-left flex justify-between items-center bg-gray-50 hover:bg-gray-100 transition-colors border-t border-b border-gray-200"
+                  >
+                    <span className="text-sm text-gray-600">更多设置</span>
+                    <svg
+                      className={`w-5 h-5 text-gray-400 transform transition-transform duration-200 ${
+                        isExpanded ? 'rotate-180' : ''
+                      }`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  
+                  {isExpanded && (
+                    <div className="px-3 py-2 sm:p-3 space-y-3">
+                      <div>
+                        <label htmlFor="streakCount" className="block text-base font-medium text-gray-700 mb-1.5">
+                          连击次数
+                        </label>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="number"
+                            id="streakCount"
+                            value={streakCount}
+                            onChange={(e) => setStreakCount(Math.max(0, parseInt(e.target.value) || 0))}
+                            min="0"
+                            className="block w-full h-12 sm:h-13 rounded-lg border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-3 py-1.5"
+                          />
+                          <div className="text-sm text-gray-500">连续完成次数</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </form>
         </div>

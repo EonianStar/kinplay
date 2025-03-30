@@ -9,10 +9,6 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   timezone: string;
-  signIn: (email: string, password: string) => Promise<void>;
-  signOut: () => Promise<void>;
-  signInWithEmailPassword: (email: string, password: string) => Promise<void>;
-  signInWithWeChat: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -20,10 +16,6 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   loading: true,
   timezone: 'UTC',
-  signIn: async () => { throw new Error('AuthContext not initialized'); },
-  signOut: async () => { throw new Error('AuthContext not initialized'); },
-  signInWithEmailPassword: async () => { throw new Error('AuthContext not initialized'); },
-  signInWithWeChat: async () => { throw new Error('AuthContext not initialized'); },
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -80,52 +72,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     };
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-    } catch (error) {
-      console.error('登录失败:', error);
-      throw error;
-    }
-  };
-
-  const signOut = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-    } catch (error) {
-      console.error('登出失败:', error);
-      throw error;
-    }
-  };
-
-  const signInWithEmailPassword = async (email: string, password: string) => {
-    return signIn(email, password);
-  };
-
-  const signInWithWeChat = async () => {
-    try {
-      // 微信登录逻辑
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'wechat' as any, // 使用类型断言处理类型问题
-      });
-      if (error) throw error;
-    } catch (error) {
-      console.error('微信登录失败:', error);
-      throw error;
-    }
-  };
-
   const value = {
     user,
     session,
     loading,
     timezone,
-    signIn,
-    signOut,
-    signInWithEmailPassword,
-    signInWithWeChat,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
