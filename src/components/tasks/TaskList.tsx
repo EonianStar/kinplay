@@ -46,14 +46,16 @@ export default function TaskList({ tasks = [] }: TaskListProps) {
               className="bg-white rounded-lg shadow p-4 flex items-center justify-between"
             >
               <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  className="h-5 w-5 text-indigo-600 rounded"
-                  checked={task.completed}
-                  onChange={() => {
-                    // 处理任务完成逻辑
-                  }}
-                />
+                <div className="flex-shrink-0 flex items-center justify-center">
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 text-indigo-600 rounded"
+                    checked={task.completed}
+                    onChange={() => {
+                      // 处理任务完成逻辑
+                    }}
+                  />
+                </div>
                 <span className={`ml-3 ${task.completed ? 'line-through text-gray-400' : 'text-gray-900'}`}>
                   {task.title}
                 </span>

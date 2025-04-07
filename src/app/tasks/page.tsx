@@ -12,12 +12,17 @@ import DailyQuickAdd from '@/components/dailies/DailyQuickAdd';
 import TodoList from '@/components/todos/TodoList';
 import TodoQuickAdd from '@/components/todos/TodoQuickAdd';
 import TodoQuickCreate from '@/components/todos/TodoQuickCreate';
+import RewardList from '@/components/rewards/RewardList';
+import RewardEditDialog from '@/components/rewards/RewardEditDialog';
+import RewardQuickAdd from '@/components/rewards/RewardQuickAdd';
 import { createHabit } from '@/services/habits';
 import { createDaily } from '@/services/dailies';
 import { createTodo } from '@/services/todos';
+import { createReward, updateReward } from '@/services/rewards';
 import { CreateHabitRequest } from '@/types/habit';
 import { CreateDailyRequest, Daily, DailyDifficulty, DailyRepeatPeriod } from '@/types/daily';
 import { CreateTodoRequest, TodoDifficulty } from '@/types/todo';
+import { CreateRewardRequest, Reward, DEFAULT_REWARD, UpdateRewardRequest } from '@/types/reward';
 import { toast } from 'react-hot-toast';
 import { QuestionMarkCircleIcon, PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { Dialog, Transition } from '@headlessui/react';
@@ -31,12 +36,16 @@ export default function TasksPage() {
   const [isHabitHelpOpen, setIsHabitHelpOpen] = useState(false);
   const [isDailyHelpOpen, setIsDailyHelpOpen] = useState(false);
   const [isTodoHelpOpen, setIsTodoHelpOpen] = useState(false);
+  const [isRewardHelpOpen, setIsRewardHelpOpen] = useState(false);
+  const [isRewardDialogOpen, setIsRewardDialogOpen] = useState(false);
   const [habitFilter, setHabitFilter] = useState<'all' | 'forming' | 'formed'>('all');
   const [dailyFilter, setDailyFilter] = useState<'active' | 'inactive' | 'all'>('active');
   const [todoFilter, setTodoFilter] = useState<'incomplete' | 'completed' | 'all'>('incomplete');
+  const [editingReward, setEditingReward] = useState<Reward | null>(null);
   const habitListRef = useRef<{ loadHabits: () => Promise<void> } | null>(null);
   const dailyListRef = useRef<{ loadDailies: () => Promise<void> } | null>(null);
   const todoListRef = useRef<{ loadTodos: () => Promise<void> } | null>(null);
+  const rewardListRef = useRef<{ loadRewards: () => Promise<void> } | null>(null);
 
   const handleSaveHabit = async (habitData: CreateHabitRequest) => {
     try {
@@ -97,6 +106,41 @@ export default function TasksPage() {
     }
   };
 
+  const handleSaveReward = async (rewardData: CreateRewardRequest) => {
+    try {
+      // 区分新建和编辑
+      if ('id' in rewardData) {
+        // 更新现有奖励
+        const updatedReward = await updateReward(rewardData as UpdateRewardRequest);
+        setIsRewardDialogOpen(false);
+        toast.success('奖励更新成功！');
+        
+        // 只更新修改的单个奖励条目
+        if (rewardListRef.current) {
+          rewardListRef.current.updateRewardItem(updatedReward);
+        }
+      } else {
+        // 创建新奖励
+        const newReward = await createReward(rewardData);
+        setIsRewardDialogOpen(false);
+        toast.success('奖励创建成功！');
+        
+        // 刷新奖励列表
+        if (rewardListRef.current) {
+          await rewardListRef.current.loadRewards();
+        }
+      }
+    } catch (error: any) {
+      console.error('处理奖励失败:', error);
+      toast.error(`操作失败: ${error.message || '请重试'}`);
+    }
+  };
+
+  const handleEditReward = (reward: Reward) => {
+    setEditingReward(reward);
+    setIsRewardDialogOpen(true);
+  };
+
   const handleQuickAddDaily = async (title: string) => {
     try {
       // 使用默认值创建日常任务
@@ -150,6 +194,30 @@ export default function TasksPage() {
     } catch (error: any) {
       console.error('快速创建待办事项失败:', error);
       toast.error(`创建失败: ${error.message || '请重试'}`);
+    }
+  };
+
+  // 处理快速添加奖励
+  const handleQuickAddReward = async (title: string) => {
+    try {
+      // 使用默认值创建奖励
+      const newReward = {
+        title,
+        description: '',
+        icon: DEFAULT_REWARD.icon,
+        price: DEFAULT_REWARD.price
+      };
+      
+      const createdReward = await createReward(newReward);
+      toast.success('奖励创建成功！');
+      
+      // 添加新奖励到列表而不是刷新整个列表
+      if (rewardListRef.current) {
+        rewardListRef.current.addRewardItem(createdReward);
+      }
+    } catch (error) {
+      console.error('创建奖励失败:', error);
+      toast.error('创建奖励失败，请重试');
     }
   };
 
@@ -351,8 +419,37 @@ export default function TasksPage() {
 
             {/* 成长激励板块 */}
             <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">成长激励</h2>
-              <p className="text-gray-600">即将推出...</p>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-semibold text-gray-900">成长激励</h2>
+                  <button
+                    onClick={() => setIsRewardHelpOpen(true)}
+                    className="text-gray-500 hover:text-gray-700 focus:outline-none"
+                    aria-label="成长激励功能帮助"
+                  >
+                    <QuestionMarkCircleIcon className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingReward(null);
+                      setIsRewardDialogOpen(true);
+                    }}
+                    className="text-indigo-600 hover:text-indigo-800 focus:outline-none"
+                    aria-label="添加奖励"
+                  >
+                    <PlusIcon className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+              <RewardQuickAdd onAdd={handleQuickAddReward} />
+              <RewardList 
+                ref={rewardListRef} 
+                onAddClick={() => {
+                  setEditingReward(null);
+                  setIsRewardDialogOpen(true);
+                }}
+                onEditClick={handleEditReward}
+              />
             </div>
           </div>
         </div>
@@ -371,7 +468,13 @@ export default function TasksPage() {
         onSave={handleSaveDaily}
       />
       
-      {/* 帮助对话框 */}
+      <RewardEditDialog
+        isOpen={isRewardDialogOpen}
+        reward={editingReward || undefined}
+        onClose={() => setIsRewardDialogOpen(false)}
+        onSave={handleSaveReward}
+      />
+      
       {renderHelpDialog(
         isHabitHelpOpen, 
         setIsHabitHelpOpen, 
@@ -438,6 +541,29 @@ export default function TasksPage() {
             <li>根据逾期情况自动调整任务价值等级</li>
           </ul>
           <p className="text-sm italic mt-2">按时完成高价值任务将获得更多成长激励。</p>
+        </div>
+      )}
+      
+      {renderHelpDialog(
+        isRewardHelpOpen, 
+        setIsRewardHelpOpen, 
+        "成长激励功能介绍", 
+        <div className="space-y-3 text-gray-600">
+          <p>「成长激励」板块帮助您设置奖励目标，激励自己完成习惯和任务。</p>
+          <p className="font-medium text-gray-800">主要功能：</p>
+          <ul className="list-disc ml-5 space-y-1">
+            <li>设置不同价值的奖励目标</li>
+            <li>使用完成任务获得的金币兑换奖励</li>
+            <li>为不同种类的奖励添加自定义图标</li>
+            <li>给奖励添加详细描述和标签</li>
+          </ul>
+          <p className="font-medium text-gray-800">使用建议：</p>
+          <ul className="list-disc ml-5 space-y-1">
+            <li>设置不同价值的短期和长期奖励</li>
+            <li>将奖励与生活目标结合</li>
+            <li>合理设置奖励价格，激励持续进步</li>
+          </ul>
+          <p className="text-sm italic mt-2">兑换奖励功能将在后续版本添加，敬请期待。</p>
         </div>
       )}
       

@@ -107,7 +107,7 @@ const SortableTodoItem = ({
     >
       <div className="flex">
         {/* 左侧色块与复选框 */}
-        <div className="w-10 flex items-start justify-center pt-4 rounded-l-lg" style={{ backgroundColor: getColorByValueLevel(todo.value_level || 0) }}>
+        <div className="w-10 flex items-center justify-center rounded-l-lg" style={{ backgroundColor: getColorByValueLevel(todo.value_level || 0) }}>
           <input
             type="checkbox"
             className="h-5 w-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
