@@ -2,8 +2,8 @@
 
 import { useState, useEffect, forwardRef, useImperativeHandle, useRef } from 'react';
 import { PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
-import { Reward } from '@/types/reward';
-import { getRewards, deleteReward, updateRewardsOrder } from '@/services/rewards';
+import { Reward, RewardStatus } from '@/types/reward';
+import { getRewards, deleteReward, updateRewardsOrder, redeemReward } from '@/services/rewards';
 import RewardIcon from '@/components/icons/RewardIcon';
 import CashflowIcon from '../../assets/icons/coins/cashflow.svg';
 import {
@@ -44,6 +44,7 @@ interface SortableRewardItemProps {
   onDelete: (id: string) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onRedeem: (reward: Reward) => void;
   isFirst: boolean;
   isLast: boolean;
 }
@@ -51,11 +52,12 @@ interface SortableRewardItemProps {
 const SortableRewardItem = ({ 
   reward, 
   onEditClick, 
-  onDelete,
-  onMoveUp,
+  onDelete, 
+  onMoveUp, 
   onMoveDown,
+  onRedeem,
   isFirst,
-  isLast 
+  isLast
 }: SortableRewardItemProps) => {
   const [showMobileButtons, setShowMobileButtons] = useState(false);
   const isMobile = useIsMobile();
@@ -66,52 +68,46 @@ const SortableRewardItem = ({
     setNodeRef,
     transform,
     transition,
-    isDragging
+    isDragging,
   } = useSortable({ id: reward.id });
-
-  const style = {
-    transform: transform ? CSS.Transform.toString({
-      ...transform,
-      scaleX: 1,
-      scaleY: 1
-    }) : undefined,
-    transition,
-    zIndex: isDragging ? 1000 : 1,
-    opacity: isDragging ? 0.7 : 1,
-    position: 'relative' as const
-  };
-
-  // 长按处理函数
-  const handleLongPress = () => {
-    if (isMobile) {
-      // 播放触觉反馈 (如果设备支持)
-      if ('vibrate' in navigator) {
-        navigator.vibrate(50); // 振动50ms
-      }
-      // 显示移动按钮
-      setShowMobileButtons(true);
-    }
-  };
-
-  // 添加长按检测
-  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  
+  // 只在非移动设备上启用拖拽监听器
+  const desktopListeners = isMobile ? {} : listeners;
+  
+  // 长按处理 - 用于移动设备
+  const longPressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const startLongPress = () => {
-    if (isMobile) {
-      longPressTimer.current = setTimeout(() => {
-        handleLongPress();
-      }, 500); // 500ms长按触发
-    }
+    longPressTimeoutRef.current = setTimeout(() => {
+      setShowMobileButtons(prev => !prev);
+    }, 600); // 600ms 长按时间
   };
   
   const cancelLongPress = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
     }
   };
+  
+  useEffect(() => {
+    return () => {
+      cancelLongPress();
+    };
+  }, []);
+  
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 30 : 1,
+    opacity: isDragging ? 0.5 : 1,
+  };
 
-  const desktopListeners = isMobile ? {} : listeners;
+  // 处理兑换按钮点击
+  const handleRedeemClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onRedeem(reward);
+  };
 
   return (
     <div 
@@ -122,7 +118,7 @@ const SortableRewardItem = ({
     >
       {/* 编辑和删除按钮移至右上角 */}
       <div className="absolute top-2 right-2 flex space-x-1 z-10">
-        {onEditClick && (
+        {onEditClick && !reward.redeemed && (
           <button
             type="button"
             onClick={() => onEditClick(reward)}
@@ -168,20 +164,77 @@ const SortableRewardItem = ({
         
         {/* 内容区域 */}
         <div className="flex-1">
-          <h3 className="text-sm font-medium text-gray-900 pr-12">{reward.title}</h3>
+          <h3 className={`text-sm font-medium text-gray-900 pr-12 ${reward.redeemed ? 'line-through text-gray-500' : ''}`}>
+            {reward.title}
+          </h3>
           <div className="flex justify-between items-end mt-1">
             {reward.description ? (
-              <p className="text-xs text-gray-500 pr-3 flex-1">{reward.description}</p>
+              <p className={`text-xs text-gray-500 pr-3 flex-1 ${reward.redeemed ? 'line-through' : ''}`}>
+                {reward.description}
+              </p>
             ) : (
               <div className="flex-1"></div>
             )}
-            <div className="flex-shrink-0 flex items-center text-sm font-medium bg-indigo-50 px-2 py-0.5 rounded-full">
-              <CashflowIcon className="h-4 w-4 mr-1.5" />
-              <span className="text-indigo-600">{reward.price}</span>
-            </div>
+            {reward.redeemed ? (
+              <div className="flex-shrink-0 text-xs text-gray-400 italic">
+                已兑换 {new Date(reward.redeemed_at || '').toLocaleDateString()}
+              </div>
+            ) : (
+              <button
+                onClick={handleRedeemClick}
+                className="flex-shrink-0 flex items-center text-sm font-medium bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 px-3 py-1 rounded-full transition-colors"
+              >
+                <CashflowIcon className="h-4 w-4 mr-1.5" />
+                <span className="text-indigo-600">兑换 {reward.price}</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+// 过滤器组件
+const RewardFilter = ({ 
+  currentStatus, 
+  onStatusChange 
+}: { 
+  currentStatus: RewardStatus; 
+  onStatusChange: (status: RewardStatus) => void 
+}) => {
+  return (
+    <div className="flex space-x-2 mb-4">
+      <button
+        onClick={() => onStatusChange(RewardStatus.PENDING)}
+        className={`px-3 py-1 rounded-full text-sm ${
+          currentStatus === RewardStatus.PENDING
+            ? 'bg-indigo-100 text-indigo-700 font-medium'
+            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+        }`}
+      >
+        待兑换
+      </button>
+      <button
+        onClick={() => onStatusChange(RewardStatus.REDEEMED)}
+        className={`px-3 py-1 rounded-full text-sm ${
+          currentStatus === RewardStatus.REDEEMED
+            ? 'bg-indigo-100 text-indigo-700 font-medium'
+            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+        }`}
+      >
+        已兑换
+      </button>
+      <button
+        onClick={() => onStatusChange(RewardStatus.ALL)}
+        className={`px-3 py-1 rounded-full text-sm ${
+          currentStatus === RewardStatus.ALL
+            ? 'bg-indigo-100 text-indigo-700 font-medium'
+            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+        }`}
+      >
+        全部
+      </button>
     </div>
   );
 };
@@ -191,6 +244,8 @@ const RewardList = forwardRef<RewardListRef, RewardListProps>((props, ref) => {
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<RewardStatus>(RewardStatus.PENDING);
+  const [redeeming, setRedeeming] = useState(false);
   const isMobile = useIsMobile();
 
   // 配置拖拽传感器
@@ -229,14 +284,14 @@ const RewardList = forwardRef<RewardListRef, RewardListProps>((props, ref) => {
   // 首次加载数据
   useEffect(() => {
     loadRewards();
-  }, []);
+  }, [status]); // 当状态过滤器变化时重新加载
 
   // 加载奖励列表
   const loadRewards = async () => {
     setLoading(true);
     setError(null);
     try {
-      const rewardsData = await getRewards();
+      const rewardsData = await getRewards(status);
       setRewards(rewardsData);
     } catch (err: any) {
       console.error('加载奖励失败:', err);
@@ -258,6 +313,30 @@ const RewardList = forwardRef<RewardListRef, RewardListProps>((props, ref) => {
         console.error('删除奖励失败:', err);
         alert('删除奖励失败，请重试');
       }
+    }
+  };
+
+  // 处理兑换奖励
+  const handleRedeem = async (reward: Reward) => {
+    if (redeeming) return; // 防止重复点击
+    
+    try {
+      setRedeeming(true);
+      const updatedReward = await redeemReward({ id: reward.id });
+      
+      // 更新本地状态
+      setRewards(prev => 
+        prev.map(item => 
+          item.id === updatedReward.id ? updatedReward : item
+        )
+      );
+      
+      alert(`恭喜！成功兑换了 "${reward.title}"，花费 ${reward.price} 金币`);
+    } catch (err: any) {
+      console.error('兑换奖励失败:', err);
+      alert(err?.message || '兑换奖励失败，请重试');
+    } finally {
+      setRedeeming(false);
     }
   };
 
@@ -337,12 +416,14 @@ const RewardList = forwardRef<RewardListRef, RewardListProps>((props, ref) => {
     );
   }
 
-  // 空列表显示
-  if (rewards.length === 0) {
-    return (
-      <div className="text-center text-gray-500 py-10">
-        <p className="mb-3">暂无奖励</p>
-        {onAddClick && (
+  return (
+    <div>
+      {/* 过滤器 */}
+      <div className="flex justify-between items-center mb-4">
+        <RewardFilter currentStatus={status} onStatusChange={setStatus} />
+        
+        {/* 添加奖励按钮 */}
+        {onAddClick && status !== RewardStatus.REDEEMED && (
           <button 
             onClick={onAddClick}
             className="inline-flex items-center px-3 py-1 border border-transparent text-sm rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -351,34 +432,52 @@ const RewardList = forwardRef<RewardListRef, RewardListProps>((props, ref) => {
           </button>
         )}
       </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext
-          items={rewards.map(reward => reward.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          {rewards.map((reward, index) => (
-            <SortableRewardItem
-              key={reward.id}
-              reward={reward}
-              onEditClick={onEditClick}
-              onDelete={handleDelete}
-              onMoveUp={() => handleMoveUp(reward.id)}
-              onMoveDown={() => handleMoveDown(reward.id)}
-              isFirst={index === 0}
-              isLast={index === rewards.length - 1}
-            />
-          ))}
-        </SortableContext>
-      </DndContext>
+      
+      {/* 奖励列表 */}
+      {rewards.length === 0 ? (
+        <div className="text-center text-gray-500 py-10">
+          <p className="mb-3">
+            {status === RewardStatus.PENDING && '暂无待兑换奖励'}
+            {status === RewardStatus.REDEEMED && '暂无已兑换奖励'}
+            {status === RewardStatus.ALL && '暂无奖励'}
+          </p>
+          {onAddClick && status !== RewardStatus.REDEEMED && (
+            <button 
+              onClick={onAddClick}
+              className="inline-flex items-center px-3 py-1 border border-transparent text-sm rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              添加奖励
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={rewards.map(reward => reward.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {rewards.map((reward, index) => (
+                <SortableRewardItem
+                  key={reward.id}
+                  reward={reward}
+                  onEditClick={onEditClick}
+                  onDelete={handleDelete}
+                  onRedeem={handleRedeem}
+                  onMoveUp={() => handleMoveUp(reward.id)}
+                  onMoveDown={() => handleMoveDown(reward.id)}
+                  isFirst={index === 0}
+                  isLast={index === rewards.length - 1}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        </div>
+      )}
     </div>
   );
 });

@@ -38,6 +38,15 @@ export interface Reward {
   created_at: string;     // 创建时间
   updated_at: string;     // 更新时间
   position?: number;      // 位置（用于排序，可选）
+  redeemed: boolean;      // 是否已兑换
+  redeemed_at?: string;   // 兑换时间
+}
+
+// 奖励状态枚举
+export enum RewardStatus {
+  PENDING = 'pending',    // 待兑换
+  REDEEMED = 'redeemed',  // 已兑换
+  ALL = 'all'             // 全部
 }
 
 // 创建奖励请求接口
@@ -55,6 +64,11 @@ export interface UpdateRewardRequest {
   description?: string;   // 说明
   price?: number;         // 价格
   icon?: string;          // 图标
+}
+
+// 兑换奖励请求接口
+export interface RedeemRewardRequest {
+  id: string;             // 奖励ID
 }
 
 export const DEFAULT_ICONS = [
@@ -92,7 +106,7 @@ export const DEFAULT_ICONS = [
   'wave'             // 波浪
 ];
 
-export const DEFAULT_REWARD: Omit<Reward, 'id' | 'user_id' | 'created_at' | 'updated_at'> = {
+export const DEFAULT_REWARD: Omit<Reward, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'redeemed' | 'redeemed_at'> = {
   title: '',
   description: '',
   price: 10,
