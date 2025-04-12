@@ -34,9 +34,13 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import useIsMobile from '@/hooks/useIsMobile';
+import MobileOrderButtons from '@/components/common/MobileOrderButtons';
 
 export interface HabitListRef {
   loadHabits: () => Promise<void>;
+  updateHabitItem: (habit: Habit) => void;
+  addHabitItem: (habit: Habit) => void;
 }
 
 interface HabitListProps {
@@ -75,6 +79,10 @@ interface SortableHabitItemProps {
   onTagsClick: (id: number) => void;
   showTags: number | null;
   handleDelete: (id: number) => Promise<void>;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  isFirst: boolean;
+  isLast: boolean;
 }
 
 // 可拖拽的习惯项组件
@@ -86,8 +94,15 @@ const SortableHabitItem = ({
   onBadIncrement,
   onTagsClick,
   showTags,
-  handleDelete
+  handleDelete,
+  onMoveUp,
+  onMoveDown,
+  isFirst,
+  isLast
 }: SortableHabitItemProps) => {
+  const [showMobileButtons, setShowMobileButtons] = useState(false);
+  const isMobile = useIsMobile();
+  
   const {
     attributes,
     listeners,
@@ -104,6 +119,38 @@ const SortableHabitItem = ({
     opacity: isDragging ? 0.5 : 1,
     position: 'relative' as const
   };
+
+  // 长按处理函数
+  const handleLongPress = () => {
+    if (isMobile) {
+      // 播放触觉反馈 (如果设备支持)
+      if ('vibrate' in navigator) {
+        navigator.vibrate(50); // 振动50ms
+      }
+      // 显示移动按钮
+      setShowMobileButtons(true);
+    }
+  };
+
+  // 添加长按检测
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  
+  const startLongPress = () => {
+    if (isMobile) {
+      longPressTimer.current = setTimeout(() => {
+        handleLongPress();
+      }, 500); // 500ms长按触发
+    }
+  };
+  
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const desktopListeners = isMobile ? {} : listeners;
 
   return (
     <div
@@ -150,9 +197,24 @@ const SortableHabitItem = ({
 
       {/* Main content */}
       <div 
-        className="flex flex-col px-8 cursor-grab active:cursor-grabbing min-h-[60px] py-1"
-        {...listeners}
+        className={`flex flex-col px-8 ${isMobile ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'} min-h-[60px] py-1`}
+        {...desktopListeners}
+        onTouchStart={isMobile ? startLongPress : undefined}
+        onTouchEnd={isMobile ? cancelLongPress : undefined}
+        onTouchMove={isMobile ? cancelLongPress : undefined}
+        onTouchCancel={isMobile ? cancelLongPress : undefined}
       >
+        {/* 移动端排序按钮 */}
+        {isMobile && showMobileButtons && (
+          <MobileOrderButtons
+            isFirst={isFirst}
+            isLast={isLast}
+            onMoveUp={onMoveUp}
+            onMoveDown={onMoveDown}
+            onClose={() => setShowMobileButtons(false)}
+          />
+        )}
+
         <div className="flex justify-between items-start mb-1">
           <div className="pr-16">
             <h3 className="font-medium text-gray-900 break-all">{habit.title}</h3>
@@ -228,16 +290,17 @@ const HabitList = forwardRef<HabitListRef, HabitListProps>(function HabitList(pr
   const [error, setError] = useState<string | null>(null);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
   const [showTags, setShowTags] = useState<number | null>(null);
+  const isMobile = useIsMobile();
   
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
+    useSensor(PointerSensor, { 
+      activationConstraint: { 
+        delay: 250, // 延迟触发时间
+        tolerance: 8, // 容差值，在此范围内的移动不会触发滚动
+        distance: 8, // 需要移动8px才触发拖拽
+      } 
     }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   const loadHabits = async () => {
@@ -255,7 +318,23 @@ const HabitList = forwardRef<HabitListRef, HabitListProps>(function HabitList(pr
   };
 
   useImperativeHandle(ref, () => ({
-    loadHabits
+    loadHabits,
+    updateHabitItem: (habit: Habit) => {
+      setHabits(prev => {
+        // 检查条目是否已经存在
+        const exists = prev.some(item => item.id === habit.id);
+        if (exists) {
+          // 更新现有条目
+          return prev.map(item => item.id === habit.id ? habit : item);
+        } else {
+          // 如果不存在，则添加到列表
+          return [...prev, habit];
+        }
+      });
+    },
+    addHabitItem: (habit: Habit) => {
+      setHabits(prev => [...prev, habit]);
+    }
   }));
 
   useEffect(() => {
@@ -294,10 +373,10 @@ const HabitList = forwardRef<HabitListRef, HabitListProps>(function HabitList(pr
         updated_at: new Date().toISOString(),
       };
 
-      await updateHabit(editingHabit.id.toString(), updateData);
+      const updatedHabit = await updateHabit(editingHabit.id.toString(), updateData);
       setEditingHabit(null);
-      // 刷新习惯列表
-      await loadHabits();
+      // 直接更新单个习惯，不刷新整个列表
+      setHabits(prev => prev.map(item => item.id === updatedHabit.id ? updatedHabit : item));
     } catch (error) {
       console.error('更新习惯失败:', error);
     }
@@ -307,7 +386,8 @@ const HabitList = forwardRef<HabitListRef, HabitListProps>(function HabitList(pr
     if (confirm('确定要删除这个习惯吗？')) {
       try {
         await deleteHabit(id);
-        await loadHabits(); // 重新加载列表
+        // 直接从状态中移除该习惯
+        setHabits(prev => prev.filter(item => item.id !== id));
       } catch (err) {
         console.error('删除习惯失败:', err);
       }
@@ -316,9 +396,9 @@ const HabitList = forwardRef<HabitListRef, HabitListProps>(function HabitList(pr
 
   const handleGoodCountIncrement = async (habitId: number) => {
     try {
-      await incrementGoodCount(habitId);
-      // 刷新习惯列表
-      await loadHabits();
+      const updatedHabit = await incrementGoodCount(habitId);
+      // 直接更新单个习惯
+      setHabits(prev => prev.map(item => item.id === updatedHabit.id ? updatedHabit : item));
     } catch (error) {
       console.error('增加计数失败:', error);
     }
@@ -326,9 +406,9 @@ const HabitList = forwardRef<HabitListRef, HabitListProps>(function HabitList(pr
 
   const handleBadCountIncrement = async (habitId: number) => {
     try {
-      await incrementBadCount(habitId);
-      // 刷新习惯列表
-      await loadHabits();
+      const updatedHabit = await incrementBadCount(habitId);
+      // 直接更新单个习惯
+      setHabits(prev => prev.map(item => item.id === updatedHabit.id ? updatedHabit : item));
     } catch (error) {
       console.error('增加计数失败:', error);
     }
@@ -370,6 +450,38 @@ const HabitList = forwardRef<HabitListRef, HabitListProps>(function HabitList(pr
     return true;
   });
 
+  // 处理上移按钮点击
+  const handleMoveUp = (habitId: number) => {
+    setHabits((items) => {
+      const index = items.findIndex((item) => item.id === habitId);
+      if (index <= 0) return items;
+      
+      const newItems = [...items];
+      [newItems[index - 1], newItems[index]] = [newItems[index], newItems[index - 1]];
+      
+      // 更新后端顺序
+      updateHabitsOrder(newItems.map(item => item.id));
+      
+      return newItems;
+    });
+  };
+
+  // 处理下移按钮点击
+  const handleMoveDown = (habitId: number) => {
+    setHabits((items) => {
+      const index = items.findIndex((item) => item.id === habitId);
+      if (index >= items.length - 1) return items;
+      
+      const newItems = [...items];
+      [newItems[index], newItems[index + 1]] = [newItems[index + 1], newItems[index]];
+      
+      // 更新后端顺序
+      updateHabitsOrder(newItems.map(item => item.id));
+      
+      return newItems;
+    });
+  };
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -402,7 +514,7 @@ const HabitList = forwardRef<HabitListRef, HabitListProps>(function HabitList(pr
             strategy={verticalListSortingStrategy}
           >
             {filteredHabits.length > 0 ? (
-              filteredHabits.map((habit) => (
+              filteredHabits.map((habit, index) => (
                 <SortableHabitItem
                   key={habit.id}
                   habit={habit}
@@ -413,6 +525,10 @@ const HabitList = forwardRef<HabitListRef, HabitListProps>(function HabitList(pr
                   onTagsClick={() => {}}
                   showTags={null}
                   handleDelete={handleDelete}
+                  onMoveUp={() => handleMoveUp(habit.id)}
+                  onMoveDown={() => handleMoveDown(habit.id)}
+                  isFirst={index === 0}
+                  isLast={index === filteredHabits.length - 1}
                 />
               ))
             ) : (

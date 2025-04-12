@@ -15,18 +15,22 @@ import TodoQuickCreate from '@/components/todos/TodoQuickCreate';
 import RewardList from '@/components/rewards/RewardList';
 import RewardEditDialog from '@/components/rewards/RewardEditDialog';
 import RewardQuickAdd from '@/components/rewards/RewardQuickAdd';
-import { createHabit } from '@/services/habits';
-import { createDaily } from '@/services/dailies';
+import { createHabit, updateHabit } from '@/services/habits';
+import { createDaily, updateDaily } from '@/services/dailies';
 import { createTodo } from '@/services/todos';
 import { createReward, updateReward } from '@/services/rewards';
-import { CreateHabitRequest } from '@/types/habit';
-import { CreateDailyRequest, Daily, DailyDifficulty, DailyRepeatPeriod } from '@/types/daily';
+import { CreateHabitRequest, UpdateHabitRequest } from '@/types/habit';
+import { CreateDailyRequest, Daily, DailyDifficulty, DailyRepeatPeriod, UpdateDailyRequest } from '@/types/daily';
 import { CreateTodoRequest, TodoDifficulty } from '@/types/todo';
 import { CreateRewardRequest, Reward, DEFAULT_REWARD, UpdateRewardRequest } from '@/types/reward';
 import { toast } from 'react-hot-toast';
 import { QuestionMarkCircleIcon, PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
+import { HabitListRef } from '@/components/habits/HabitList';
+import { DailyListRef } from '@/components/dailies/DailyList';
+import { TodoListRef } from '@/components/todos/TodoList';
+import { RewardListRef } from '@/components/rewards/RewardList';
 
 export default function TasksPage() {
   const router = useRouter();
@@ -42,50 +46,68 @@ export default function TasksPage() {
   const [dailyFilter, setDailyFilter] = useState<'active' | 'inactive' | 'all'>('active');
   const [todoFilter, setTodoFilter] = useState<'incomplete' | 'completed' | 'all'>('incomplete');
   const [editingReward, setEditingReward] = useState<Reward | null>(null);
-  const habitListRef = useRef<{ loadHabits: () => Promise<void> } | null>(null);
-  const dailyListRef = useRef<{ loadDailies: () => Promise<void> } | null>(null);
-  const todoListRef = useRef<{ loadTodos: () => Promise<void> } | null>(null);
-  const rewardListRef = useRef<{ loadRewards: () => Promise<void> } | null>(null);
+  const habitListRef = useRef<HabitListRef | null>(null);
+  const dailyListRef = useRef<DailyListRef | null>(null);
+  const todoListRef = useRef<TodoListRef | null>(null);
+  const rewardListRef = useRef<RewardListRef | null>(null);
 
   const handleSaveHabit = async (habitData: CreateHabitRequest) => {
     try {
-      await createHabit(habitData);
-      setIsHabitDialogOpen(false);
-      toast.success('习惯创建成功！');
-      // 刷新习惯列表
-      if (habitListRef.current) {
-        await habitListRef.current.loadHabits();
+      // 区分新建和编辑
+      if ('id' in habitData) {
+        // 更新现有习惯
+        const updatedHabit = await updateHabit(habitData as UpdateHabitRequest);
+        setIsHabitDialogOpen(false);
+        toast.success('习惯更新成功！');
+        
+        // 只更新修改的单个习惯条目
+        if (habitListRef.current) {
+          habitListRef.current.updateHabitItem(updatedHabit);
+        }
+      } else {
+        // 创建新习惯
+        const newHabit = await createHabit(habitData);
+        setIsHabitDialogOpen(false);
+        toast.success('习惯创建成功！');
+        
+        // 添加新习惯到列表
+        if (habitListRef.current) {
+          habitListRef.current.addHabitItem(newHabit);
+        }
       }
-    } catch (error) {
-      console.error('创建习惯失败:', error);
-      toast.error('创建习惯失败，请重试');
+    } catch (error: any) {
+      console.error('处理习惯失败:', error);
+      toast.error(`操作失败: ${error.message || '请重试'}`);
     }
   };
 
-  const handleSaveDaily = async (dailyData: CreateDailyRequest | Partial<Daily>) => {
+  const handleSaveDaily = async (dailyData: CreateDailyRequest) => {
     try {
-      // 类型检查，确保数据符合CreateDailyRequest类型
-      console.log('准备创建日常任务:', JSON.stringify(dailyData, null, 2));
+      // 区分新建和编辑
       if ('id' in dailyData) {
-        // 如果包含id字段，说明是编辑现有任务，这里仅处理新建
-        console.error('提供了ID，但这是创建操作');
-        toast.error('操作失败：无法创建已有ID的任务');
-        return;
-      }
-      await createDaily(dailyData as CreateDailyRequest);
-      setIsDailyDialogOpen(false);
-      toast.success('日常任务创建成功！');
-      // 刷新日常任务列表
-      if (dailyListRef.current) {
-        await dailyListRef.current.loadDailies();
+        // 更新现有日常任务
+        const updatedDaily = await updateDaily(dailyData as UpdateDailyRequest);
+        setIsDailyDialogOpen(false);
+        toast.success('日常任务更新成功！');
+        
+        // 只更新修改的单个日常任务条目
+        if (dailyListRef.current) {
+          dailyListRef.current.updateDailyItem(updatedDaily);
+        }
+      } else {
+        // 创建新日常任务
+        const newDaily = await createDaily(dailyData);
+        setIsDailyDialogOpen(false);
+        toast.success('日常任务创建成功！');
+        
+        // 添加新日常任务到列表
+        if (dailyListRef.current) {
+          dailyListRef.current.addDailyItem(newDaily);
+        }
       }
     } catch (error: any) {
-      console.error('创建日常任务失败:', error);
-      console.error('错误详情:', error.message || '未知错误');
-      if (error.details) {
-        console.error('错误详情:', error.details);
-      }
-      toast.error(`创建日常任务失败: ${error.message || '请重试'}`);
+      console.error('处理日常任务失败:', error);
+      toast.error(`操作失败: ${error.message || '请重试'}`);
     }
   };
   
@@ -175,25 +197,30 @@ export default function TasksPage() {
   };
 
   const handleQuickAddTodo = async (title: string) => {
+    if (!title.trim()) return;
+    
     try {
-      // 使用默认值创建待办事项
       const todoData: CreateTodoRequest = {
         title,
         description: '',
-        difficulty: TodoDifficulty.EASY, // 修改为简单难度
+        difficulty: TodoDifficulty.MEDIUM,
+        value_level: 0,
+        completed: false,
+        due_date: null,
+        checklist: [],
         tags: []
       };
       
-      await createTodo(todoData);
+      const newTodo = await createTodo(todoData);
       toast.success('待办事项创建成功！');
       
-      // 刷新待办事项列表
+      // 添加新待办事项到列表
       if (todoListRef.current) {
-        await todoListRef.current.loadTodos();
+        todoListRef.current.addTodoItem(newTodo);
       }
-    } catch (error: any) {
-      console.error('快速创建待办事项失败:', error);
-      toast.error(`创建失败: ${error.message || '请重试'}`);
+    } catch (error) {
+      console.error('创建待办事项失败:', error);
+      toast.error('创建失败，请重试');
     }
   };
 
@@ -284,7 +311,7 @@ export default function TasksPage() {
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-white to-purple-100">
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-8 pt-16 md:pt-20">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* 培养习惯板块 */}
             <div className="bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-6">

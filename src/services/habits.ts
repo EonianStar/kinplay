@@ -7,7 +7,15 @@ import {
   HabitDifficulty,
   HabitResetPeriod
 } from '@/types/habit';
-import { ValueLevel, increaseValueLevel, decreaseValueLevel } from '@/utils/valueLevel';
+import { ValueLevel, increaseValueLevel, decreaseValueLevel, getWeightByValueLevel } from '@/utils/valueLevel';
+import { 
+  calculateExperience, 
+  calculateCoins,
+  BASE_EXPERIENCE,
+  getTaskTypeWeight,
+  getDifficultyWeight,
+} from '../utils/rewardsCalculator';
+import { addExp, addCoins, deductCoins } from './userStats';
 
 export async function getHabits(): Promise<Habit[]> {
   const {
@@ -182,85 +190,175 @@ export async function deleteHabit(id: number): Promise<void> {
   }
 }
 
-export async function incrementGoodCount(id: number): Promise<void> {
-  // 先获取当前习惯信息
-  const { data: habit, error: fetchError } = await supabase
-    .from('habits')
-    .select('good_count, value_level, nature')
-    .eq('id', id)
-    .single();
+export async function incrementGoodCount(id: number): Promise<Habit> {
+  try {
+    // 获取用户ID
+    const { data: authData, error: authError } = await supabase.auth.getSession();
+    if (authError || !authData.session) {
+      throw new Error('用户未登录');
+    }
+    const userId = authData.session.user.id;
 
-  if (fetchError) {
-    console.error('获取习惯计数失败:', fetchError);
-    throw fetchError;
-  }
+    // 先获取当前习惯信息
+    const { data: habit, error: fetchError } = await supabase
+      .from('habits')
+      .select('good_count, value_level, nature, difficulty, user_id')
+      .eq('id', id)
+      .single();
 
-  // 检查习惯是否包含好习惯性质
-  if (!habit.nature.includes(HabitNature.GOOD)) {
-    console.error('该习惯不是好习惯，无法增加好习惯计数');
-    throw new Error('该习惯不是好习惯，无法增加好习惯计数');
-  }
+    if (fetchError) {
+      console.error('获取习惯计数失败:', fetchError);
+      throw fetchError;
+    }
 
-  // 计算新的价值权重等级 - 完成好习惯应提高价值权重等级
-  const currentValueLevel = habit.value_level || 0;
-  const newValueLevel = increaseValueLevel(currentValueLevel);
-  
-  console.log(`习惯 ID: ${id} 价值权重等级从 ${currentValueLevel} 变为 ${newValueLevel} (完成好习惯)`);
+    // 检查习惯是否包含好习惯性质
+    if (!habit.nature.includes(HabitNature.GOOD)) {
+      console.error('该习惯不是好习惯，无法增加好习惯计数');
+      throw new Error('该习惯不是好习惯，无法增加好习惯计数');
+    }
 
-  // 更新计数和价值权重等级
-  const { error: updateError } = await supabase
-    .from('habits')
-    .update({ 
-      good_count: (habit?.good_count || 0) + 1,
-      value_level: newValueLevel,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', id);
+    // 计算新的价值权重等级 - 完成好习惯应提高价值权重等级
+    const currentValueLevel = habit.value_level || 0;
+    const newValueLevel = increaseValueLevel(currentValueLevel);
+    
+    // 注意：我们应该使用当前的价值权重等级来计算奖励，而不是使用新的价值权重等级
+    // 这样才能确保奖励是基于当前等级的表现
+    const experience = calculateExperience('habit', habit.difficulty, currentValueLevel);
+    const coins = calculateCoins('habit', habit.difficulty, currentValueLevel);
+    
+    console.log(`习惯ID ${id} 完成: 获得经验 ${experience}, 金币 ${coins}, 价值等级从 ${currentValueLevel} 变为 ${newValueLevel}`);
+    console.log(`计算明细: 基础经验(${BASE_EXPERIENCE}) × 任务类型权重(${getTaskTypeWeight('habit')}) × 难度系数权重(${getDifficultyWeight(habit.difficulty)}) × 任务价值权重(${getWeightByValueLevel(currentValueLevel)})`);
 
-  if (updateError) {
-    console.error('增加好习惯计数失败:', updateError);
-    throw updateError;
+    // 更新计数和价值权重等级
+    const { data: updatedHabit, error: updateError } = await supabase
+      .from('habits')
+      .update({ 
+        good_count: (habit?.good_count || 0) + 1,
+        value_level: newValueLevel,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (updateError) {
+      console.error('增加好习惯计数失败:', updateError);
+      throw updateError;
+    }
+    
+    // 添加习惯完成记录
+    try {
+      // 添加到习惯完成记录表
+      await supabase
+        .from('habit_completions')
+        .insert({
+          habit_id: id,
+          user_id: userId,
+          completed_at: new Date().toISOString(),
+          is_good: true,
+          experience_gained: experience,
+          coins_gained: coins,
+          created_at: new Date().toISOString()
+        });
+        
+      // 添加经验和金币
+      await addExp(userId, experience);
+      await addCoins(userId, coins);
+    } catch (rewardError) {
+      console.error('更新用户奖励失败:', rewardError);
+      // 继续处理，不影响主流程
+    }
+
+    return updatedHabit;
+  } catch (error) {
+    console.error('增加好习惯计数失败:', error);
+    throw error;
   }
 }
 
-export async function incrementBadCount(id: number): Promise<void> {
-  // 先获取当前习惯信息
-  const { data: habit, error: fetchError } = await supabase
-    .from('habits')
-    .select('bad_count, value_level, nature')
-    .eq('id', id)
-    .single();
+export async function incrementBadCount(id: number): Promise<Habit> {
+  try {
+    // 获取用户ID
+    const { data: authData, error: authError } = await supabase.auth.getSession();
+    if (authError || !authData.session) {
+      throw new Error('用户未登录');
+    }
+    const userId = authData.session.user.id;
 
-  if (fetchError) {
-    console.error('获取习惯计数失败:', fetchError);
-    throw fetchError;
-  }
+    // 先获取当前习惯信息
+    const { data: habit, error: fetchError } = await supabase
+      .from('habits')
+      .select('bad_count, value_level, nature, difficulty, user_id')
+      .eq('id', id)
+      .single();
 
-  // 检查习惯是否包含坏习惯性质
-  if (!habit.nature.includes(HabitNature.BAD)) {
-    console.error('该习惯不是坏习惯，无法增加坏习惯计数');
-    throw new Error('该习惯不是坏习惯，无法增加坏习惯计数');
-  }
+    if (fetchError) {
+      console.error('获取习惯计数失败:', fetchError);
+      throw fetchError;
+    }
 
-  // 计算新的价值权重等级 - 记录坏习惯应降低价值权重等级
-  const currentValueLevel = habit.value_level || 0;
-  const newValueLevel = decreaseValueLevel(currentValueLevel);
-  
-  console.log(`习惯 ID: ${id} 价值权重等级从 ${currentValueLevel} 变为 ${newValueLevel} (记录坏习惯)`);
+    // 检查习惯是否包含坏习惯性质
+    if (!habit.nature.includes(HabitNature.BAD)) {
+      console.error('该习惯不是坏习惯，无法增加坏习惯计数');
+      throw new Error('该习惯不是坏习惯，无法增加坏习惯计数');
+    }
 
-  // 更新计数和价值权重等级
-  const { error: updateError } = await supabase
-    .from('habits')
-    .update({ 
-      bad_count: (habit?.bad_count || 0) + 1,
-      value_level: newValueLevel,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', id);
+    // 计算新的价值权重等级 - 记录坏习惯应降低价值权重等级
+    const currentValueLevel = habit.value_level || 0;
+    const newValueLevel = decreaseValueLevel(currentValueLevel);
+    
+    // 计算经验奖励（坏习惯依然获得经验）和金币扣除
+    const experience = calculateExperience('habit', habit.difficulty, currentValueLevel);
+    const coinsToDeduct = calculateCoins('habit', habit.difficulty, currentValueLevel);
+    
+    console.log(`习惯ID ${id} 记录坏习惯: 获得经验 ${experience}, 扣除金币 ${coinsToDeduct}, 价值等级从 ${currentValueLevel} 变为 ${newValueLevel}`);
+    console.log(`计算明细: 基础经验(${BASE_EXPERIENCE}) × 任务类型权重(${getTaskTypeWeight('habit')}) × 难度系数权重(${getDifficultyWeight(habit.difficulty)}) × 任务价值权重(${getWeightByValueLevel(currentValueLevel)})`);
 
-  if (updateError) {
-    console.error('增加坏习惯计数失败:', updateError);
-    throw updateError;
+    // 更新计数和价值权重等级
+    const { data: updatedHabit, error: updateError } = await supabase
+      .from('habits')
+      .update({ 
+        bad_count: (habit?.bad_count || 0) + 1,
+        value_level: newValueLevel,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (updateError) {
+      console.error('增加坏习惯计数失败:', updateError);
+      throw updateError;
+    }
+    
+    // 添加习惯完成记录和奖励
+    try {
+      // 添加到习惯完成记录表
+      await supabase
+        .from('habit_completions')
+        .insert({
+          habit_id: id,
+          user_id: userId,
+          completed_at: new Date().toISOString(),
+          is_good: false,
+          experience_gained: experience,
+          coins_gained: -coinsToDeduct, // 负值表示扣除
+          created_at: new Date().toISOString()
+        });
+      
+      // 添加经验和扣除金币
+      await addExp(userId, experience);
+      // 扣除金币，但不能变为负数
+      await deductCoins(userId, coinsToDeduct);
+    } catch (rewardError) {
+      console.error('更新用户奖励失败:', rewardError);
+      // 继续处理，不影响主流程
+    }
+
+    return updatedHabit;
+  } catch (error) {
+    console.error('增加坏习惯计数失败:', error);
+    throw error;
   }
 }
 

@@ -9,7 +9,15 @@ import {
   UpdateTodoRequest
 } from '@/types/todo';
 import { v4 as uuidv4 } from 'uuid';
-import { ValueLevel, getValueLevelAdjustmentByOverdue } from '@/utils/valueLevel';
+import { ValueLevel, getValueLevelAdjustmentByOverdue, getWeightByValueLevel } from '@/utils/valueLevel';
+import { 
+  calculateExperience, 
+  calculateCoins,
+  BASE_EXPERIENCE,
+  getTaskTypeWeight,
+  getDifficultyWeight
+} from '../utils/rewardsCalculator';
+import { addExp, addCoins, deductExp, deductCoins } from './userStats';
 
 /**
  * 获取所有待办事项
@@ -445,6 +453,69 @@ export const toggleTodoComplete = async (todoId: string, completed: boolean): Pr
       } else {
         // 未逾期，重置为中性
         valueLevel = ValueLevel.NEUTRAL;
+      }
+    }
+
+    // 如果是标记为已完成，计算经验和金币奖励
+    if (completed) {
+      const hasDueDate = !!existingTodo.due_date;
+      const experience = calculateExperience('todo', existingTodo.difficulty, valueLevel, hasDueDate);
+      const coins = calculateCoins('todo', existingTodo.difficulty, valueLevel, hasDueDate);
+      
+      console.log(`待办事项ID ${todoId} 完成: 获得经验 ${experience}, 金币 ${coins}, 价值等级 ${valueLevel}`);
+      console.log(`计算明细: 基础经验(${BASE_EXPERIENCE}) × 任务类型权重(${getTaskTypeWeight('todo', hasDueDate)}) × 难度系数权重(${getDifficultyWeight(existingTodo.difficulty)}) × 任务价值权重(${getWeightByValueLevel(valueLevel)})`);
+      
+      try {
+        // 添加经验和金币
+        await addExp(userId, experience);
+        await addCoins(userId, coins);
+        
+        // 添加完成记录
+        await supabase
+          .from('todo_completions')
+          .insert({
+            todo_id: todoId,
+            user_id: userId,
+            completed_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            experience_gained: experience,
+            coins_gained: coins
+          });
+      } catch (error) {
+        console.error('添加待办事项完成记录或奖励失败:', error);
+        // 继续处理，不影响主流程
+      }
+    } else if (!completed) {
+      // 如果是取消完成，查找最近的完成记录并扣除相应的经验和金币
+      try {
+        const { data: lastCompletion } = await supabase
+          .from('todo_completions')
+          .select('*')
+          .eq('todo_id', todoId)
+          .eq('user_id', userId)
+          .order('completed_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (lastCompletion) {
+          const experienceToDeduct = lastCompletion.experience_gained || 0;
+          const coinsToDeduct = lastCompletion.coins_gained || 0;
+          
+          console.log(`待办事项ID ${todoId} 取消完成: 扣除经验 ${experienceToDeduct}, 金币 ${coinsToDeduct}`);
+          
+          // 扣除经验和金币
+          await deductExp(userId, experienceToDeduct);
+          await deductCoins(userId, coinsToDeduct);
+          
+          // 删除完成记录
+          await supabase
+            .from('todo_completions')
+            .delete()
+            .eq('id', lastCompletion.id);
+        }
+      } catch (error) {
+        console.error('处理待办事项取消完成失败:', error);
+        // 继续处理，不影响主流程
       }
     }
 

@@ -35,6 +35,8 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import useIsMobile from '@/hooks/useIsMobile';
+import MobileOrderButtons from '@/components/common/MobileOrderButtons';
 
 interface TodoListProps {
   onAddClick?: () => void;
@@ -62,6 +64,10 @@ interface SortableTodoItemProps {
   getCompletedTasksCount: (checklist: TodoTask[] | undefined) => { completed: number; total: number };
   renderDifficultyStars: (difficulty: TodoDifficulty) => JSX.Element;
   formatDate: (dateStr: string) => string;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  isFirst: boolean;
+  isLast: boolean;
 }
 
 // 可拖拽的待办事项组件
@@ -77,8 +83,15 @@ const SortableTodoItem = ({
   toggleExpand,
   getCompletedTasksCount,
   renderDifficultyStars,
-  formatDate
+  formatDate,
+  onMoveUp,
+  onMoveDown,
+  isFirst,
+  isLast,
 }: SortableTodoItemProps) => {
+  const [showMobileButtons, setShowMobileButtons] = useState(false);
+  const isMobile = useIsMobile();
+  
   const {
     attributes,
     listeners,
@@ -95,6 +108,38 @@ const SortableTodoItem = ({
     opacity: isDragging ? 0.5 : 1,
     position: 'relative' as const
   };
+
+  // 长按处理函数
+  const handleLongPress = () => {
+    if (isMobile) {
+      // 播放触觉反馈 (如果设备支持)
+      if ('vibrate' in navigator) {
+        navigator.vibrate(50); // 振动50ms
+      }
+      // 显示移动按钮
+      setShowMobileButtons(true);
+    }
+  };
+
+  // 添加长按检测
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  
+  const startLongPress = () => {
+    if (isMobile) {
+      longPressTimer.current = setTimeout(() => {
+        handleLongPress();
+      }, 500); // 500ms长按触发
+    }
+  };
+  
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const desktopListeners = isMobile ? {} : listeners;
 
   return (
     <div 
@@ -118,9 +163,24 @@ const SortableTodoItem = ({
         
         {/* 主要内容区域 */}
         <div 
-          className="flex-1 py-3 pr-4 pl-4 cursor-grab active:cursor-grabbing" 
-          {...listeners}
+          className={`flex-1 py-3 pr-4 pl-4 ${isMobile ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`} 
+          {...desktopListeners}
+          onTouchStart={isMobile ? startLongPress : undefined}
+          onTouchEnd={isMobile ? cancelLongPress : undefined}
+          onTouchMove={isMobile ? cancelLongPress : undefined}
+          onTouchCancel={isMobile ? cancelLongPress : undefined}
         >
+          {/* 移动端排序按钮 */}
+          {isMobile && showMobileButtons && (
+            <MobileOrderButtons
+              isFirst={isFirst}
+              isLast={isLast}
+              onMoveUp={onMoveUp}
+              onMoveDown={onMoveDown}
+              onClose={() => setShowMobileButtons(false)}
+            />
+          )}
+          
           <div className="flex flex-col">
             {/* 顶部区域：标题和操作菜单 */}
             <div className="flex justify-between items-start mb-1">
@@ -242,7 +302,13 @@ const SortableTodoItem = ({
   );
 };
 
-const TodoList = forwardRef<{ loadTodos: () => Promise<void> }, TodoListProps>(function TodoList(props, ref) {
+export interface TodoListRef {
+  loadTodos: () => Promise<void>;
+  updateTodoItem: (todo: Todo) => void;
+  addTodoItem: (todo: Todo) => void;
+}
+
+const TodoList = forwardRef<TodoListRef, TodoListProps>(function TodoList(props, ref) {
   const { onAddClick, filter = 'all' } = props;
   const [todos, setTodos] = useState<Todo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -251,10 +317,17 @@ const TodoList = forwardRef<{ loadTodos: () => Promise<void> }, TodoListProps>(f
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null);
   const [visibleTagId, setVisibleTagId] = useState<string | null>(null);
+  const isMobile = useIsMobile();
   
   // 拖拽相关传感器设置
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(PointerSensor, { 
+      activationConstraint: { 
+        delay: 250, // 延迟触发时间
+        tolerance: 8, // 容差值，在此范围内的移动不会触发滚动
+        distance: 8, // 需要移动8px才触发拖拽
+      } 
+    }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
   
@@ -282,9 +355,45 @@ const TodoList = forwardRef<{ loadTodos: () => Promise<void> }, TodoListProps>(f
   useEffect(() => {
     if (ref) {
       if (typeof ref === 'function') {
-        ref({ loadTodos });
+        ref({ 
+          loadTodos,
+          updateTodoItem: (todo: Todo) => {
+            setTodos(prev => {
+              // 检查条目是否已经存在
+              const exists = prev.some(item => item.id === todo.id);
+              if (exists) {
+                // 更新现有条目
+                return prev.map(item => item.id === todo.id ? todo : item);
+              } else {
+                // 如果不存在，则添加到列表
+                return [...prev, todo];
+              }
+            });
+          },
+          addTodoItem: (todo: Todo) => {
+            setTodos(prev => [...prev, todo]);
+          }
+        });
       } else {
-        ref.current = { loadTodos };
+        ref.current = { 
+          loadTodos,
+          updateTodoItem: (todo: Todo) => {
+            setTodos(prev => {
+              // 检查条目是否已经存在
+              const exists = prev.some(item => item.id === todo.id);
+              if (exists) {
+                // 更新现有条目
+                return prev.map(item => item.id === todo.id ? todo : item);
+              } else {
+                // 如果不存在，则添加到列表
+                return [...prev, todo];
+              }
+            });
+          },
+          addTodoItem: (todo: Todo) => {
+            setTodos(prev => [...prev, todo]);
+          }
+        };
       }
     }
   }, [ref]);
@@ -329,9 +438,12 @@ const TodoList = forwardRef<{ loadTodos: () => Promise<void> }, TodoListProps>(f
       }
       
       // 调用updateTodo服务函数保存到数据库
-      await updateTodo(editingTodo.id, updateData);
+      const updatedTodo = await updateTodo(editingTodo.id, updateData);
+      
+      // 使用updateTodoItem直接更新单个条目，而不是刷新整个列表
+      setTodos(prev => prev.map(item => item.id === updatedTodo.id ? updatedTodo : item));
+      
       setIsEditDialogOpen(false);
-      await loadTodos(); // 重新加载数据以更新UI
     } catch (error) {
       console.error('更新待办事项失败:', error);
     } finally {
@@ -344,7 +456,8 @@ const TodoList = forwardRef<{ loadTodos: () => Promise<void> }, TodoListProps>(f
     if (confirm('确定要删除这个待办事项吗？')) {
       try {
         await deleteTodo(id);
-        await loadTodos();
+        // 直接从状态中移除该项，不刷新整个列表
+        setTodos(prev => prev.filter(item => item.id !== id));
       } catch (error) {
         console.error('删除待办事项失败:', error);
       }
@@ -355,10 +468,10 @@ const TodoList = forwardRef<{ loadTodos: () => Promise<void> }, TodoListProps>(f
   const handleToggleComplete = async (todo: Todo) => {
     try {
       // 简单切换完成状态，不再自动完成所有子任务
-      await toggleTodoComplete(todo.id, !todo.completed);
+      const updatedTodo = await toggleTodoComplete(todo.id, !todo.completed);
       
-      // 刷新列表
-      await loadTodos();
+      // 使用状态更新函数直接更新单个条目
+      setTodos(prev => prev.map(item => item.id === updatedTodo.id ? updatedTodo : item));
     } catch (error) {
       console.error('更新任务状态失败:', error);
     }
@@ -375,13 +488,14 @@ const TodoList = forwardRef<{ loadTodos: () => Promise<void> }, TodoListProps>(f
       );
       
       // 只更新子任务状态，不再自动完成主任务
-      await updateTodo(todoId, { 
+      const updatedTodo = await updateTodo(todoId, { 
         id: todoId,
         checklist: updatedChecklist
         // 移除 completed: allCompleted，不再自动设置主任务完成状态
       });
       
-      await loadTodos();
+      // 使用状态更新函数直接更新单个条目
+      setTodos(prev => prev.map(item => item.id === updatedTodo.id ? updatedTodo : item));
     } catch (error) {
       console.error('更新子任务状态失败:', error);
     }
@@ -460,7 +574,7 @@ const TodoList = forwardRef<{ loadTodos: () => Promise<void> }, TodoListProps>(f
   };
   
   // 处理拖拽结束事件
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     
     if (over && active.id !== over.id) {
@@ -497,6 +611,38 @@ const TodoList = forwardRef<{ loadTodos: () => Promise<void> }, TodoListProps>(f
     if (filter === 'incomplete') return !todo.completed;
     return true;
   });
+  
+  // 处理上移按钮点击
+  const handleMoveUp = (todoId: string) => {
+    setTodos((items) => {
+      const index = items.findIndex((item) => item.id === todoId);
+      if (index <= 0) return items;
+      
+      const newItems = [...items];
+      [newItems[index - 1], newItems[index]] = [newItems[index], newItems[index - 1]];
+      
+      // 更新后端顺序
+      updateTodosOrder(newItems.map(item => item.id));
+      
+      return newItems;
+    });
+  };
+
+  // 处理下移按钮点击
+  const handleMoveDown = (todoId: string) => {
+    setTodos((items) => {
+      const index = items.findIndex((item) => item.id === todoId);
+      if (index >= items.length - 1) return items;
+      
+      const newItems = [...items];
+      [newItems[index], newItems[index + 1]] = [newItems[index + 1], newItems[index]];
+      
+      // 更新后端顺序
+      updateTodosOrder(newItems.map(item => item.id));
+      
+      return newItems;
+    });
+  };
   
   // 加载中显示
   if (loading) {
@@ -554,7 +700,7 @@ const TodoList = forwardRef<{ loadTodos: () => Promise<void> }, TodoListProps>(f
           items={filteredTodos.map(todo => todo.id)}
           strategy={verticalListSortingStrategy}
         >
-          {filteredTodos.map((todo) => (
+          {filteredTodos.map((todo, index) => (
             <SortableTodoItem
               key={todo.id}
               todo={todo}
@@ -569,6 +715,10 @@ const TodoList = forwardRef<{ loadTodos: () => Promise<void> }, TodoListProps>(f
               getCompletedTasksCount={getCompletedTasksCount}
               renderDifficultyStars={renderDifficultyStars}
               formatDate={formatDate}
+              onMoveUp={() => handleMoveUp(todo.id)}
+              onMoveDown={() => handleMoveDown(todo.id)}
+              isFirst={index === 0}
+              isLast={index === filteredTodos.length - 1}
             />
           ))}
         </SortableContext>

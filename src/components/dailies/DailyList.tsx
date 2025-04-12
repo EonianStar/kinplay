@@ -39,6 +39,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '@/lib/supabase';
 import { getColorByValueLevel, ValueLevel } from '@/utils/valueLevel';
+import useIsMobile from '@/hooks/useIsMobile';
+import MobileOrderButtons from '@/components/common/MobileOrderButtons';
 
 interface DailyListProps {
   onAddClick?: () => void;
@@ -77,6 +79,10 @@ interface SortableDailyItemProps {
   getCompletedTasksCount: (checklist: DailyTask[] | undefined) => { completed: number; total: number };
   renderDifficultyStars: (difficulty: DailyDifficulty) => JSX.Element;
   formatDate: (dateStr: string) => string;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  isFirst: boolean;
+  isLast: boolean;
 }
 
 // 可拖拽的日常任务项组件
@@ -94,8 +100,15 @@ const SortableDailyItem = ({
   toggleExpand,
   getCompletedTasksCount,
   renderDifficultyStars,
-  formatDate
+  formatDate,
+  onMoveUp,
+  onMoveDown,
+  isFirst,
+  isLast
 }: SortableDailyItemProps) => {
+  const [showMobileButtons, setShowMobileButtons] = useState(false);
+  const isMobile = useIsMobile();
+  
   const {
     attributes,
     listeners,
@@ -112,6 +125,38 @@ const SortableDailyItem = ({
     opacity: isDragging ? 0.5 : 1,
     position: 'relative' as const
   };
+
+  // 长按处理函数
+  const handleLongPress = () => {
+    if (isMobile) {
+      // 播放触觉反馈 (如果设备支持)
+      if ('vibrate' in navigator) {
+        navigator.vibrate(50); // 振动50ms
+      }
+      // 显示移动按钮
+      setShowMobileButtons(true);
+    }
+  };
+
+  // 添加长按检测
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  
+  const startLongPress = () => {
+    if (isMobile) {
+      longPressTimer.current = setTimeout(() => {
+        handleLongPress();
+      }, 500); // 500ms长按触发
+    }
+  };
+  
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const desktopListeners = isMobile ? {} : listeners;
 
   return (
     <div 
@@ -132,9 +177,24 @@ const SortableDailyItem = ({
         
         {/* 主要内容区域 */}
         <div 
-          className="flex-1 py-3 px-4 cursor-grab active:cursor-grabbing" 
-          {...listeners}
+          className={`flex-1 py-3 px-4 ${isMobile ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`}
+          {...desktopListeners}
+          onTouchStart={isMobile ? startLongPress : undefined}
+          onTouchEnd={isMobile ? cancelLongPress : undefined}
+          onTouchMove={isMobile ? cancelLongPress : undefined}
+          onTouchCancel={isMobile ? cancelLongPress : undefined}
         >
+          {/* 移动端排序按钮 */}
+          {isMobile && showMobileButtons && (
+            <MobileOrderButtons
+              isFirst={isFirst}
+              isLast={isLast}
+              onMoveUp={onMoveUp}
+              onMoveDown={onMoveDown}
+              onClose={() => setShowMobileButtons(false)}
+            />
+          )}
+          
           <div className="flex justify-between items-start">
             <div>
               <div className="font-medium text-gray-900 break-all">{daily.title}</div>
@@ -307,17 +367,31 @@ const SortableDailyItem = ({
   );
 };
 
-const DailyList = forwardRef<{ loadDailies: () => Promise<void> }, DailyListProps>(({ onAddClick, filter = 'all' }, ref) => {
+export interface DailyListRef {
+  loadDailies: () => Promise<void>;
+  updateDailyItem: (daily: Daily) => void;
+  addDailyItem: (daily: Daily) => void;
+}
+
+const DailyList = forwardRef<DailyListRef, DailyListProps>(({ onAddClick, filter = 'all' }, ref) => {
   const [dailies, setDailies] = useState<Daily[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedDailies, setExpandedDailies] = useState<{[key: string]: boolean}>({});
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingDaily, setEditingDaily] = useState<Daily | null>(null);
+  const [visibleTagId, setVisibleTagId] = useState<string | null>(null);
+  const isMobile = useIsMobile();
   
   // 拖拽相关传感器设置
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(PointerSensor, { 
+      activationConstraint: { 
+        delay: 250, // 延迟触发时间
+        tolerance: 8, // 容差值，在此范围内的移动不会触发滚动
+        distance: 8, // 需要移动8px才触发拖拽
+      } 
+    }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -336,7 +410,23 @@ const DailyList = forwardRef<{ loadDailies: () => Promise<void> }, DailyListProp
   };
 
   useImperativeHandle(ref, () => ({
-    loadDailies
+    loadDailies,
+    updateDailyItem: (daily: Daily) => {
+      setDailies(prev => {
+        // 检查条目是否已经存在
+        const exists = prev.some(item => item.id === daily.id);
+        if (exists) {
+          // 更新现有条目
+          return prev.map(item => item.id === daily.id ? daily : item);
+        } else {
+          // 如果不存在，则添加到列表
+          return [...prev, daily];
+        }
+      });
+    },
+    addDailyItem: (daily: Daily) => {
+      setDailies(prev => [...prev, daily]);
+    }
   }));
 
   useEffect(() => {
@@ -369,9 +459,11 @@ const DailyList = forwardRef<{ loadDailies: () => Promise<void> }, DailyListProp
         ...dailyData,
         id: editingDaily.id
       };
-      await updateDaily(editingDaily.id, updateData);
+      const updatedDaily = await updateDaily(editingDaily.id, updateData);
       setIsEditDialogOpen(false);
-      await loadDailies();
+      
+      // 直接更新单个条目
+      setDailies(prev => prev.map(item => item.id === updatedDaily.id ? updatedDaily : item));
     } catch (error) {
       console.error('更新日常任务失败:', error);
     } finally {
@@ -383,7 +475,8 @@ const DailyList = forwardRef<{ loadDailies: () => Promise<void> }, DailyListProp
     if (confirm('确定要删除这个日常任务吗？')) {
       try {
         await deleteDaily(id);
-        await loadDailies();
+        // 直接从状态中移除该项
+        setDailies(prev => prev.filter(item => item.id !== id));
       } catch (error) {
         console.error('删除日常任务失败:', error);
       }
@@ -392,8 +485,9 @@ const DailyList = forwardRef<{ loadDailies: () => Promise<void> }, DailyListProp
 
   const handleIncrementStreak = async (id: string) => {
     try {
-      await updateDailyStreak(id, true);
-      await loadDailies();
+      const updatedDaily = await updateDailyStreak(id, true);
+      // 直接更新单个条目
+      setDailies(prev => prev.map(item => item.id === updatedDaily.id ? updatedDaily : item));
     } catch (error) {
       console.error('更新连击次数失败:', error);
     }
@@ -401,8 +495,9 @@ const DailyList = forwardRef<{ loadDailies: () => Promise<void> }, DailyListProp
 
   const handleResetStreak = async (id: string) => {
     try {
-      await updateDailyStreak(id, false);
-      await loadDailies();
+      const updatedDaily = await updateDailyStreak(id, false);
+      // 直接更新单个条目
+      setDailies(prev => prev.map(item => item.id === updatedDaily.id ? updatedDaily : item));
     } catch (error) {
       console.error('重置连击次数失败:', error);
     }
@@ -421,22 +516,27 @@ const DailyList = forwardRef<{ loadDailies: () => Promise<void> }, DailyListProp
           completed: !allCompleted
         }));
         
-        await updateDaily(daily.id, { 
+        // 更新子任务完成状态
+        const updatedDaily = await updateDaily(daily.id, { 
           id: daily.id,
           checklist: updatedChecklist
         });
         
         // 如果所有子任务完成状态由未完成变为完成，则增加连击次数
         if (!allCompleted) {
-          await handleIncrementStreak(daily.id);
+          const updatedDailyWithStreak = await updateDailyStreak(daily.id, true);
+          // 直接更新单个条目
+          setDailies(prev => prev.map(item => item.id === updatedDailyWithStreak.id ? updatedDailyWithStreak : item));
+        } else {
+          // 直接更新单个条目
+          setDailies(prev => prev.map(item => item.id === updatedDaily.id ? updatedDaily : item));
         }
       } else {
         // 没有子任务时，每次勾选都增加连击次数
-        await handleIncrementStreak(daily.id);
+        const updatedDaily = await updateDailyStreak(daily.id, true);
+        // 直接更新单个条目
+        setDailies(prev => prev.map(item => item.id === updatedDaily.id ? updatedDaily : item));
       }
-      
-      // 刷新列表
-      await loadDailies();
     } catch (error) {
       console.error('更新任务状态失败:', error);
     }
@@ -451,12 +551,13 @@ const DailyList = forwardRef<{ loadDailies: () => Promise<void> }, DailyListProp
         task.id === taskId ? { ...task, completed: !completed } : task
       );
       
-      await updateDaily(dailyId, { 
+      const updatedDaily = await updateDaily(dailyId, { 
         id: dailyId,
         checklist: updatedChecklist
       });
       
-      await loadDailies();
+      // 直接更新单个条目
+      setDailies(prev => prev.map(item => item.id === updatedDaily.id ? updatedDaily : item));
     } catch (error) {
       console.error('更新子任务状态失败:', error);
     }
@@ -591,6 +692,38 @@ const DailyList = forwardRef<{ loadDailies: () => Promise<void> }, DailyListProp
     return true;
   });
 
+  // 处理上移按钮点击
+  const handleMoveUp = (dailyId: string) => {
+    setDailies((items) => {
+      const index = items.findIndex((item) => item.id === dailyId);
+      if (index <= 0) return items;
+      
+      const newItems = [...items];
+      [newItems[index - 1], newItems[index]] = [newItems[index], newItems[index - 1]];
+      
+      // 更新后端顺序
+      updateDailiesOrder(newItems.map(item => item.id));
+      
+      return newItems;
+    });
+  };
+
+  // 处理下移按钮点击
+  const handleMoveDown = (dailyId: string) => {
+    setDailies((items) => {
+      const index = items.findIndex((item) => item.id === dailyId);
+      if (index >= items.length - 1) return items;
+      
+      const newItems = [...items];
+      [newItems[index], newItems[index + 1]] = [newItems[index + 1], newItems[index]];
+      
+      // 更新后端顺序
+      updateDailiesOrder(newItems.map(item => item.id));
+      
+      return newItems;
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center py-4">
@@ -643,7 +776,7 @@ const DailyList = forwardRef<{ loadDailies: () => Promise<void> }, DailyListProp
             items={filteredDailies.map(daily => daily.id)}
             strategy={verticalListSortingStrategy}
           >
-            {filteredDailies.map((daily) => (
+            {filteredDailies.map((daily, index) => (
               <SortableDailyItem
                 key={daily.id}
                 daily={daily}
@@ -653,13 +786,17 @@ const DailyList = forwardRef<{ loadDailies: () => Promise<void> }, DailyListProp
                 onToggleSubtaskComplete={handleToggleSubtaskComplete}
                 onIncrementStreak={handleIncrementStreak}
                 onResetStreak={handleResetStreak}
-                onTagClick={() => {}}
+                onTagClick={(id) => {}}
                 visibleTagId={null}
                 expandedDailies={expandedDailies}
                 toggleExpand={toggleExpand}
                 getCompletedTasksCount={getCompletedTasksCount}
                 renderDifficultyStars={renderDifficultyStars}
                 formatDate={formatDate}
+                onMoveUp={() => handleMoveUp(daily.id)}
+                onMoveDown={() => handleMoveDown(daily.id)}
+                isFirst={index === 0}
+                isLast={index === filteredDailies.length - 1}
               />
             ))}
           </SortableContext>

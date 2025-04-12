@@ -23,7 +23,9 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           <Navbar />
-          {children}
+          <main className="pt-20 sm:pt-16">
+            {children}
+          </main>
           <Toaster />
           <OverdueChecker />
         </AuthProvider>

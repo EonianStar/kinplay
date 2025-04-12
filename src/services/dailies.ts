@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase';
 import { Daily, CreateDailyRequest, UpdateDailyRequest, DailyTask } from '@/types/daily';
-import { ValueLevel, increaseValueLevel, decreaseValueLevel } from '@/utils/valueLevel';
+import { ValueLevel, increaseValueLevel, decreaseValueLevel, getWeightByValueLevel } from '@/utils/valueLevel';
+import { calculateExperience, calculateCoins, BASE_EXPERIENCE, getTaskTypeWeight, getDifficultyWeight } from '../utils/rewardsCalculator';
+import { addExp, addCoins } from './userStats';
 
 // 获取当前用户的所有日常任务
 export async function getDailies(): Promise<Daily[]> {
@@ -366,7 +368,7 @@ export async function deleteDaily(dailyId: string): Promise<boolean> {
 }
 
 // 更新日常任务连击次数
-export async function updateDailyStreak(dailyId: string, increment: boolean): Promise<number> {
+export async function updateDailyStreak(dailyId: string, increment: boolean): Promise<Daily> {
   try {
     const { data: authData, error: authError } = await supabase.auth.getSession();
     if (authError || !authData.session) {
@@ -378,7 +380,7 @@ export async function updateDailyStreak(dailyId: string, increment: boolean): Pr
     // 获取当前日常任务
     const { data: daily, error: getError } = await supabase
       .from('dailies')
-      .select('streak_count, value_level')
+      .select('streak_count, value_level, difficulty')
       .eq('id', dailyId)
       .eq('user_id', userId)
       .single();
@@ -400,11 +402,20 @@ export async function updateDailyStreak(dailyId: string, increment: boolean): Pr
       ? increaseValueLevel(currentValueLevel) // 提高一档
       : decreaseValueLevel(currentValueLevel); // 降低一档
     
-    console.log(`日常任务 ID: ${dailyId} 价值权重等级从 ${currentValueLevel} 变为 ${newValueLevel}`);
-
-    // 如果是标记完成，添加完成记录
+    // 如果是标记完成，计算经验和金币奖励
     if (increment) {
+      // 计算经验和金币奖励
+      const experience = calculateExperience('daily', daily.difficulty, currentValueLevel);
+      const coins = calculateCoins('daily', daily.difficulty, currentValueLevel);
+      
+      console.log(`日常任务ID ${dailyId} 完成: 获得经验 ${experience}, 金币 ${coins}, 价值等级从 ${currentValueLevel} 变为 ${newValueLevel}`);
+      console.log(`计算明细: 基础经验(${BASE_EXPERIENCE}) × 任务类型权重(${getTaskTypeWeight('daily')}) × 难度系数权重(${getDifficultyWeight(daily.difficulty)}) × 任务价值权重(${getWeightByValueLevel(currentValueLevel)})`);
+      
       try {
+        // 添加经验和金币
+        await addExp(userId, experience);
+        await addCoins(userId, coins);
+        
         // 添加完成记录
         await supabase
           .from('daily_completions')
@@ -412,35 +423,37 @@ export async function updateDailyStreak(dailyId: string, increment: boolean): Pr
             daily_id: dailyId,
             user_id: userId,
             completed_at: new Date().toISOString(),
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
+            experience_gained: experience,
+            coins_gained: coins
           });
       } catch (error) {
-        console.error('添加日常任务完成记录失败:', error);
+        console.error('添加日常任务完成记录或奖励失败:', error);
         // 继续处理，不影响主流程
       }
     }
-
-    // 更新连击次数和价值权重等级
-    const { data: updatedDaily, error } = await supabase
+    
+    // 更新日常任务的连击次数和价值权重等级
+    const { data: updatedDaily, error: updateError } = await supabase
       .from('dailies')
-      .update({ 
+      .update({
         streak_count: newStreakCount,
         value_level: newValueLevel,
         updated_at: new Date().toISOString()
       })
       .eq('id', dailyId)
       .eq('user_id', userId)
-      .select('streak_count')
+      .select('*')
       .single();
 
-    if (error) {
-      console.error('更新连击次数失败:', error);
-      throw error;
+    if (updateError) {
+      console.error('更新日常任务连击次数失败:', updateError);
+      throw updateError;
     }
 
-    return updatedDaily.streak_count;
+    return updatedDaily;
   } catch (error) {
-    console.error('更新连击次数失败:', error);
+    console.error('更新日常任务连击次数过程中发生错误:', error);
     throw error;
   }
 }

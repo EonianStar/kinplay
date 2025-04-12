@@ -35,6 +35,27 @@ module.exports = {
           950: '#3b0764',
         },
       },
+      backgroundImage: {
+        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+        'gradient-conic':
+          'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
+      },
+      keyframes: {
+        float: {
+          '0%': { transform: 'translateY(0px) scale(0.8)', opacity: 0 },
+          '10%': { transform: 'translateY(-5px) scale(1.1)', opacity: 1 },
+          '80%': { transform: 'translateY(-20px) scale(1)', opacity: 1 },
+          '100%': { transform: 'translateY(-30px) scale(0.8)', opacity: 0 },
+        },
+        pulse: {
+          '0%, 100%': { opacity: 1, transform: 'scale(1)' },
+          '50%': { opacity: 0.8, transform: 'scale(1.1)' },
+        }
+      },
+      animation: {
+        'float': 'float 3s ease-out forwards',
+        'pulse': 'pulse 2s ease-in-out infinite',
+      }
     },
   },
   plugins: [],
