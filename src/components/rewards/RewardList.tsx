@@ -4,6 +4,7 @@ import { useState, useEffect, forwardRef, useImperativeHandle, useRef } from 're
 import { PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { Reward, RewardStatus } from '@/types/reward';
 import { getRewards, deleteReward, updateRewardsOrder, redeemReward } from '@/services/rewards';
+import { UserEventType, subscribeToUserEvent, publishCoinsChange } from '@/services/userEvents';
 import RewardIcon from '@/components/icons/RewardIcon';
 import CashflowIcon from '../../assets/icons/coins/cashflow.svg';
 import {
@@ -108,6 +109,13 @@ const SortableRewardItem = ({
     e.stopPropagation();
     onRedeem(reward);
   };
+  
+  // 格式化日期为中文格式 "YYYY年M月D日"
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+  };
 
   return (
     <div 
@@ -177,15 +185,15 @@ const SortableRewardItem = ({
             )}
             {reward.redeemed ? (
               <div className="flex-shrink-0 text-xs text-gray-400 italic">
-                已兑换 {new Date(reward.redeemed_at || '').toLocaleDateString()}
+                {formatDate(reward.redeemed_at || '')}
               </div>
             ) : (
               <button
                 onClick={handleRedeemClick}
-                className="flex-shrink-0 flex items-center text-sm font-medium bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 px-3 py-1 rounded-full transition-colors"
+                className="flex-shrink-0 flex items-center text-sm font-medium bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 px-2 py-0.5 rounded-full transition-colors"
               >
                 <CashflowIcon className="h-4 w-4 mr-1.5" />
-                <span className="text-indigo-600">兑换 {reward.price}</span>
+                <span className="text-indigo-600">{reward.price}</span>
               </button>
             )}
           </div>
@@ -203,35 +211,31 @@ const RewardFilter = ({
   currentStatus: RewardStatus; 
   onStatusChange: (status: RewardStatus) => void 
 }) => {
+  // 筛选器按钮样式 - 与其他版块一致
+  const filterButtonClass = (isActive: boolean) => 
+    `px-2 py-1 text-xs rounded-md transition-colors ${
+      isActive 
+        ? 'bg-indigo-100 text-indigo-700 font-medium' 
+        : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+    }`;
+    
   return (
-    <div className="flex space-x-2 mb-4">
+    <div className="flex gap-1">
       <button
         onClick={() => onStatusChange(RewardStatus.PENDING)}
-        className={`px-3 py-1 rounded-full text-sm ${
-          currentStatus === RewardStatus.PENDING
-            ? 'bg-indigo-100 text-indigo-700 font-medium'
-            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-        }`}
+        className={filterButtonClass(currentStatus === RewardStatus.PENDING)}
       >
-        待兑换
+        未兑换
       </button>
       <button
         onClick={() => onStatusChange(RewardStatus.REDEEMED)}
-        className={`px-3 py-1 rounded-full text-sm ${
-          currentStatus === RewardStatus.REDEEMED
-            ? 'bg-indigo-100 text-indigo-700 font-medium'
-            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-        }`}
+        className={filterButtonClass(currentStatus === RewardStatus.REDEEMED)}
       >
         已兑换
       </button>
       <button
         onClick={() => onStatusChange(RewardStatus.ALL)}
-        className={`px-3 py-1 rounded-full text-sm ${
-          currentStatus === RewardStatus.ALL
-            ? 'bg-indigo-100 text-indigo-700 font-medium'
-            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-        }`}
+        className={filterButtonClass(currentStatus === RewardStatus.ALL)}
       >
         全部
       </button>
@@ -331,7 +335,8 @@ const RewardList = forwardRef<RewardListRef, RewardListProps>((props, ref) => {
         )
       );
       
-      alert(`恭喜！成功兑换了 "${reward.title}"，花费 ${reward.price} 金币`);
+      // 不需要显示弹窗提示，金币动画已经足够表明扣减成功
+      // alert(`恭喜！成功兑换了 "${reward.title}"，花费 ${reward.price} 金币`);
     } catch (err: any) {
       console.error('兑换奖励失败:', err);
       alert(err?.message || '兑换奖励失败，请重试');
@@ -420,35 +425,32 @@ const RewardList = forwardRef<RewardListRef, RewardListProps>((props, ref) => {
     <div>
       {/* 过滤器 */}
       <div className="flex justify-between items-center mb-4">
-        <RewardFilter currentStatus={status} onStatusChange={setStatus} />
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-semibold text-gray-900">成长激励</h2>
+          {onAddClick && (
+            <button
+              onClick={onAddClick}
+              className="text-indigo-600 hover:text-indigo-800 focus:outline-none"
+              aria-label="添加奖励"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            </button>
+          )}
+        </div>
         
-        {/* 添加奖励按钮 */}
-        {onAddClick && status !== RewardStatus.REDEEMED && (
-          <button 
-            onClick={onAddClick}
-            className="inline-flex items-center px-3 py-1 border border-transparent text-sm rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            添加奖励
-          </button>
-        )}
+        <RewardFilter currentStatus={status} onStatusChange={setStatus} />
       </div>
       
       {/* 奖励列表 */}
       {rewards.length === 0 ? (
-        <div className="text-center text-gray-500 py-10">
-          <p className="mb-3">
-            {status === RewardStatus.PENDING && '暂无待兑换奖励'}
+        <div className="text-center text-gray-500 py-4">
+          <p>
+            {status === RewardStatus.PENDING && '暂无未兑换奖励'}
             {status === RewardStatus.REDEEMED && '暂无已兑换奖励'}
             {status === RewardStatus.ALL && '暂无奖励'}
           </p>
-          {onAddClick && status !== RewardStatus.REDEEMED && (
-            <button 
-              onClick={onAddClick}
-              className="inline-flex items-center px-3 py-1 border border-transparent text-sm rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              添加奖励
-            </button>
-          )}
         </div>
       ) : (
         <div className="space-y-3">
