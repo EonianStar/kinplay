@@ -36,6 +36,8 @@ export interface RewardListRef {
 interface RewardListProps {
   onAddClick?: () => void;
   onEditClick?: (reward: Reward) => void;
+  filter?: RewardStatus; // 外部传入的过滤器状态，使用RewardStatus枚举类型
+  hideHeader?: boolean; // 是否隐藏头部(标题和过滤器)
 }
 
 // 可排序的奖励项组件
@@ -244,13 +246,21 @@ const RewardFilter = ({
 };
 
 const RewardList = forwardRef<RewardListRef, RewardListProps>((props, ref) => {
-  const { onAddClick, onEditClick } = props;
+  const { onAddClick, onEditClick, filter: externalFilter, hideHeader = false } = props;
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<RewardStatus>(RewardStatus.PENDING);
+  const [internalStatus, setInternalStatus] = useState<RewardStatus>(RewardStatus.PENDING);
   const [redeeming, setRedeeming] = useState(false);
   const isMobile = useIsMobile();
+
+  // 使用外部传入的过滤器状态(如果有)，否则使用内部状态
+  const status = externalFilter || internalStatus;
+  const setStatus = (newStatus: RewardStatus) => {
+    if (!externalFilter) {
+      setInternalStatus(newStatus);
+    }
+  };
 
   // 配置拖拽传感器
   const sensors = useSensors(
@@ -329,11 +339,20 @@ const RewardList = forwardRef<RewardListRef, RewardListProps>((props, ref) => {
       const updatedReward = await redeemReward({ id: reward.id });
       
       // 更新本地状态
-      setRewards(prev => 
-        prev.map(item => 
-          item.id === updatedReward.id ? updatedReward : item
-        )
-      );
+      if (status === RewardStatus.PENDING) {
+        // 如果当前是"未兑换"过滤器，直接从列表中移除已兑换的奖励
+        setRewards(prev => prev.filter(item => item.id !== updatedReward.id));
+      } else {
+        // 其他情况（全部/已兑换）更新奖励状态
+        setRewards(prev => 
+          prev.map(item => 
+            item.id === updatedReward.id ? updatedReward : item
+          )
+        );
+      }
+      
+      // 金币变化和动画会通过userEvents系统和deductCoins函数自动触发
+      // 不需要额外代码，因为redeemReward函数内部已经调用了deductCoins
       
       // 不需要显示弹窗提示，金币动画已经足够表明扣减成功
       // alert(`恭喜！成功兑换了 "${reward.title}"，花费 ${reward.price} 金币`);
@@ -423,25 +442,27 @@ const RewardList = forwardRef<RewardListRef, RewardListProps>((props, ref) => {
 
   return (
     <div>
-      {/* 过滤器 */}
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-2">
-          <h2 className="text-xl font-semibold text-gray-900">成长激励</h2>
-          {onAddClick && (
-            <button
-              onClick={onAddClick}
-              className="text-indigo-600 hover:text-indigo-800 focus:outline-none"
-              aria-label="添加奖励"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-            </button>
-          )}
+      {/* 如果不隐藏头部，则显示标题和过滤器 */}
+      {!hideHeader && (
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-semibold text-gray-900">成长激励</h2>
+            {onAddClick && (
+              <button
+                onClick={onAddClick}
+                className="text-indigo-600 hover:text-indigo-800 focus:outline-none"
+                aria-label="添加奖励"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+              </button>
+            )}
+          </div>
+          
+          <RewardFilter currentStatus={status} onStatusChange={setStatus} />
         </div>
-        
-        <RewardFilter currentStatus={status} onStatusChange={setStatus} />
-      </div>
+      )}
       
       {/* 奖励列表 */}
       {rewards.length === 0 ? (

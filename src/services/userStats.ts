@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { UserStats } from '@/lib/supabase';
+import { publishExpChange, publishCoinsChange } from '@/services/userEvents';
 
 // 检查认证状态
 async function checkAuth() {
@@ -179,11 +180,7 @@ export async function addExp(userId: string, amount: number): Promise<void> {
     }
     
     // 发布经验值变化事件
-    import('./userEvents').then(({ publishExpChange }) => {
-      publishExpChange(userId, currentExp, newExp);
-    }).catch(error => {
-      console.error('发布经验值变化事件失败:', error);
-    });
+    publishExpChange(userId, currentExp, newExp);
   } catch (error) {
     console.error('增加经验值异常:', error);
     throw error;
@@ -229,11 +226,7 @@ export async function addCoins(userId: string, amount: number): Promise<void> {
     }
     
     // 发布金币变化事件
-    import('./userEvents').then(({ publishCoinsChange }) => {
-      publishCoinsChange(userId, currentCoins, newCoins);
-    }).catch(error => {
-      console.error('发布金币变化事件失败:', error);
-    });
+    publishCoinsChange(userId, currentCoins, newCoins);
   } catch (error) {
     console.error('增加金币异常:', error);
     throw error;
@@ -287,7 +280,7 @@ export async function deductExp(userId: string, amount: number): Promise<void> {
 export async function deductCoins(userId: string, amount: number): Promise<void> {
   try {
     await checkAuth();
-    console.log(`扣除金币: ${amount.toFixed(2)}`);
+    console.log(`正在扣除金币 - 用户ID: ${userId}, 金额: ${amount.toFixed(2)}`);
     
     // 获取当前金币
     const { data: stats, error: getError } = await supabase
@@ -305,7 +298,7 @@ export async function deductCoins(userId: string, amount: number): Promise<void>
     const currentCoins = stats?.coins || 0;
     const newCoins = Math.max(0, currentCoins - amount);
     
-    console.log(`当前金币: ${currentCoins.toFixed(2)}, 扣除后: ${newCoins.toFixed(2)}`);
+    console.log(`金币变化详情 - 当前金币: ${currentCoins.toFixed(2)}, 扣除金额: ${amount.toFixed(2)}, 扣除后: ${newCoins.toFixed(2)}`);
     
     // 更新金币
     const { error } = await supabase
@@ -317,11 +310,16 @@ export async function deductCoins(userId: string, amount: number): Promise<void>
       .eq('user_id', userId);
 
     if (error) {
-      console.error('扣除金币错误:', error);
+      console.error('扣除金币数据库错误:', error);
       throw new Error(`扣除金币失败: ${error.message}`);
     }
+    
+    // 发布金币变化事件，触发UI更新和音效
+    console.log(`准备发布金币变化事件 - 用户ID: ${userId}, 旧值: ${currentCoins}, 新值: ${newCoins}`);
+    publishCoinsChange(userId, currentCoins, newCoins);
+    console.log(`金币变化事件已发布 - 差额: ${newCoins - currentCoins}`);
   } catch (error) {
-    console.error('扣除金币异常:', error);
+    console.error('扣除金币过程中发生异常:', error);
     throw error;
   }
 }

@@ -245,7 +245,7 @@ export async function redeemReward(data: RedeemRewardRequest): Promise<Reward> {
       throw new Error(`金币不足，无法兑换。当前金币: ${userStats.coins.toFixed(2)}，需要: ${reward.price.toFixed(2)}`);
     }
     
-    // 扣除用户金币
+    // 扣除用户金币 - deductCoins内部会更新数据库，同时会发布金币变化事件
     await deductCoins(userId, reward.price);
     
     // 标记奖励为已兑换

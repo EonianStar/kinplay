@@ -30,15 +30,15 @@ export const valueLevelWeights: Record<ValueLevel, number> = {
 
 // 价值权重颜色映射
 export const valueLevelColors: Record<ValueLevel, string> = {
-  [ValueLevel.NEGATIVE_FOUR]: '#D81B60',
-  [ValueLevel.NEGATIVE_THREE]: '#E24B56',
-  [ValueLevel.NEGATIVE_TWO]: '#EB7A4B',
-  [ValueLevel.NEGATIVE_ONE]: '#F4A940',
-  [ValueLevel.NEUTRAL]: '#FDD835',
-  [ValueLevel.POSITIVE_ONE]: '#D5D253',
-  [ValueLevel.POSITIVE_TWO]: '#ADCB71',
-  [ValueLevel.POSITIVE_THREE]: '#85C58F',
-  [ValueLevel.POSITIVE_FOUR]: '#5DBEAC'
+  [ValueLevel.NEGATIVE_FOUR]: '#ED51E5',
+  [ValueLevel.NEGATIVE_THREE]: '#D751E8',
+  [ValueLevel.NEGATIVE_TWO]: '#C151EB',
+  [ValueLevel.NEGATIVE_ONE]: '#AB51EE',
+  [ValueLevel.NEUTRAL]: '#9450F1',
+  [ValueLevel.POSITIVE_ONE]: '#7E50F4',
+  [ValueLevel.POSITIVE_TWO]: '#684FF7',
+  [ValueLevel.POSITIVE_THREE]: '#524FFA',
+  [ValueLevel.POSITIVE_FOUR]: '#3B4EFC'
 };
 
 /**
@@ -96,4 +96,4 @@ export function getWeightByValueLevel(level: number): number {
   // 确保 level 在有效范围内
   const safeLevel = Math.max(ValueLevel.NEGATIVE_FOUR, Math.min(ValueLevel.POSITIVE_FOUR, level)) as ValueLevel;
   return valueLevelWeights[safeLevel];
-} 
+}

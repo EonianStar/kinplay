@@ -115,14 +115,26 @@ export default function RewardEditDialog({ isOpen, reward, onClose, onSave }: Re
     }
     
     // 提交数据
-    const rewardData: CreateRewardRequest = {
-      title: title.trim(),
-      description: description.trim(),
-      icon,
-      price
-    };
-    
-    onSave(rewardData);
+    if (reward?.id) {
+      // 如果是编辑现有奖励，包含ID
+      const updateData = {
+        id: reward.id,
+        title: title.trim(),
+        description: description.trim(),
+        icon,
+        price
+      };
+      onSave(updateData);
+    } else {
+      // 如果是创建新奖励
+      const rewardData: CreateRewardRequest = {
+        title: title.trim(),
+        description: description.trim(),
+        icon,
+        price
+      };
+      onSave(rewardData);
+    }
   };
   
   if (!isOpen || !mounted) return null;

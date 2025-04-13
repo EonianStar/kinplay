@@ -17,12 +17,12 @@ import RewardEditDialog from '@/components/rewards/RewardEditDialog';
 import RewardQuickAdd from '@/components/rewards/RewardQuickAdd';
 import { createHabit, updateHabit } from '@/services/habits';
 import { createDaily, updateDaily } from '@/services/dailies';
-import { createTodo } from '@/services/todos';
+import { createTodo, updateTodo } from '@/services/todos';
 import { createReward, updateReward } from '@/services/rewards';
-import { CreateHabitRequest, UpdateHabitRequest } from '@/types/habit';
+import { CreateHabitRequest, UpdateHabitRequest, Habit } from '@/types/habit';
 import { CreateDailyRequest, Daily, DailyDifficulty, DailyRepeatPeriod, UpdateDailyRequest } from '@/types/daily';
-import { CreateTodoRequest, TodoDifficulty } from '@/types/todo';
-import { CreateRewardRequest, Reward, DEFAULT_REWARD, UpdateRewardRequest } from '@/types/reward';
+import { CreateTodoRequest, TodoDifficulty, UpdateTodoRequest, Todo } from '@/types/todo';
+import { CreateRewardRequest, Reward, DEFAULT_REWARD, UpdateRewardRequest, RewardStatus } from '@/types/reward';
 import { toast } from 'react-hot-toast';
 import { QuestionMarkCircleIcon, PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { Dialog, Transition } from '@headlessui/react';
@@ -45,20 +45,20 @@ export default function TasksPage() {
   const [habitFilter, setHabitFilter] = useState<'all' | 'forming' | 'formed'>('all');
   const [dailyFilter, setDailyFilter] = useState<'active' | 'inactive' | 'all'>('active');
   const [todoFilter, setTodoFilter] = useState<'incomplete' | 'completed' | 'all'>('incomplete');
+  const [rewardFilter, setRewardFilter] = useState<'pending' | 'redeemed' | 'all'>('pending');
   const [editingReward, setEditingReward] = useState<Reward | null>(null);
   const habitListRef = useRef<HabitListRef | null>(null);
   const dailyListRef = useRef<DailyListRef | null>(null);
   const todoListRef = useRef<TodoListRef | null>(null);
   const rewardListRef = useRef<RewardListRef | null>(null);
 
-  const handleSaveHabit = async (habitData: CreateHabitRequest) => {
+  const handleSaveHabit = async (habitData: CreateHabitRequest | UpdateHabitRequest) => {
     try {
       // 区分新建和编辑
       if ('id' in habitData) {
         // 更新现有习惯
-        const updatedHabit = await updateHabit(habitData as UpdateHabitRequest);
+        const updatedHabit = await updateHabit(habitData.id, habitData);
         setIsHabitDialogOpen(false);
-        toast.success('习惯更新成功！');
         
         // 只更新修改的单个习惯条目
         if (habitListRef.current) {
@@ -68,7 +68,6 @@ export default function TasksPage() {
         // 创建新习惯
         const newHabit = await createHabit(habitData);
         setIsHabitDialogOpen(false);
-        toast.success('习惯创建成功！');
         
         // 添加新习惯到列表
         if (habitListRef.current) {
@@ -81,14 +80,13 @@ export default function TasksPage() {
     }
   };
 
-  const handleSaveDaily = async (dailyData: CreateDailyRequest) => {
+  const handleSaveDaily = async (dailyData: CreateDailyRequest | Partial<Daily>) => {
     try {
       // 区分新建和编辑
-      if ('id' in dailyData) {
+      if ('id' in dailyData && dailyData.id) {
         // 更新现有日常任务
-        const updatedDaily = await updateDaily(dailyData as UpdateDailyRequest);
+        const updatedDaily = await updateDaily(dailyData.id, dailyData as UpdateDailyRequest);
         setIsDailyDialogOpen(false);
-        toast.success('日常任务更新成功！');
         
         // 只更新修改的单个日常任务条目
         if (dailyListRef.current) {
@@ -96,9 +94,8 @@ export default function TasksPage() {
         }
       } else {
         // 创建新日常任务
-        const newDaily = await createDaily(dailyData);
+        const newDaily = await createDaily(dailyData as CreateDailyRequest);
         setIsDailyDialogOpen(false);
-        toast.success('日常任务创建成功！');
         
         // 添加新日常任务到列表
         if (dailyListRef.current) {
@@ -111,20 +108,29 @@ export default function TasksPage() {
     }
   };
   
-  const handleSaveTodo = async (todoData: CreateTodoRequest) => {
+  const handleSaveTodo = async (todoData: CreateTodoRequest | Partial<Todo>) => {
     try {
-      console.log('准备创建待办事项:', JSON.stringify(todoData, null, 2)); // 添加日志记录
-      // 调用服务函数保存到数据库
-      const newTodo = await createTodo(todoData);
-      console.log('待办事项创建成功:', newTodo); // 添加日志记录
-      toast.success('待办事项创建成功！');
-      // 刷新待办事项列表
-      if (todoListRef.current) {
-        await todoListRef.current.loadTodos();
+      // 区分新建和编辑
+      if ('id' in todoData && todoData.id) {
+        // 更新现有待办事项
+        const updatedTodo = await updateTodo(todoData.id, todoData as UpdateTodoRequest);
+        
+        // 只更新修改的单个待办事项条目
+        if (todoListRef.current) {
+          todoListRef.current.updateTodoItem(updatedTodo);
+        }
+      } else {
+        // 创建新待办事项
+        const newTodo = await createTodo(todoData as CreateTodoRequest);
+        
+        // 添加新待办事项到列表
+        if (todoListRef.current) {
+          todoListRef.current.addTodoItem(newTodo);
+        }
       }
     } catch (error: any) {
-      console.error('创建待办事项失败:', error);
-      toast.error(`创建待办事项失败: ${error.message || '请重试'}`);
+      console.error('处理待办事项失败:', error);
+      toast.error(`操作失败: ${error.message || '请重试'}`);
     }
   };
 
@@ -135,7 +141,6 @@ export default function TasksPage() {
         // 更新现有奖励
         const updatedReward = await updateReward(rewardData as UpdateRewardRequest);
         setIsRewardDialogOpen(false);
-        toast.success('奖励更新成功！');
         
         // 只更新修改的单个奖励条目
         if (rewardListRef.current) {
@@ -145,11 +150,10 @@ export default function TasksPage() {
         // 创建新奖励
         const newReward = await createReward(rewardData);
         setIsRewardDialogOpen(false);
-        toast.success('奖励创建成功！');
         
-        // 刷新奖励列表
+        // 添加新奖励到列表而不是刷新整个列表
         if (rewardListRef.current) {
-          await rewardListRef.current.loadRewards();
+          rewardListRef.current.addRewardItem(newReward);
         }
       }
     } catch (error: any) {
@@ -158,6 +162,17 @@ export default function TasksPage() {
     }
   };
 
+  // 映射rewardFilter到RewardStatus枚举
+  const getRewardStatus = (filter: 'pending' | 'redeemed' | 'all'): RewardStatus => {
+    switch (filter) {
+      case 'pending': return RewardStatus.PENDING;
+      case 'redeemed': return RewardStatus.REDEEMED;
+      case 'all': return RewardStatus.ALL;
+      default: return RewardStatus.PENDING;
+    }
+  };
+
+  // 处理编辑奖励
   const handleEditReward = (reward: Reward) => {
     setEditingReward(reward);
     setIsRewardDialogOpen(true);
@@ -183,12 +198,11 @@ export default function TasksPage() {
         tags: []
       };
       
-      await createDaily(dailyData);
-      toast.success('日常任务创建成功！');
+      const newDaily = await createDaily(dailyData);
       
-      // 刷新日常任务列表
+      // 添加新日常任务到列表
       if (dailyListRef.current) {
-        await dailyListRef.current.loadDailies();
+        dailyListRef.current.addDailyItem(newDaily);
       }
     } catch (error: any) {
       console.error('快速创建日常任务失败:', error);
@@ -212,7 +226,6 @@ export default function TasksPage() {
       };
       
       const newTodo = await createTodo(todoData);
-      toast.success('待办事项创建成功！');
       
       // 添加新待办事项到列表
       if (todoListRef.current) {
@@ -236,7 +249,6 @@ export default function TasksPage() {
       };
       
       const createdReward = await createReward(newReward);
-      toast.success('奖励创建成功！');
       
       // 添加新奖励到列表而不是刷新整个列表
       if (rewardListRef.current) {
@@ -467,6 +479,27 @@ export default function TasksPage() {
                     <PlusIcon className="h-5 w-5" />
                   </button>
                 </div>
+                
+                <div className="flex gap-1">
+                  <button 
+                    className={filterButtonClass(rewardFilter === 'pending')}
+                    onClick={() => setRewardFilter('pending')}
+                  >
+                    未兑换
+                  </button>
+                  <button 
+                    className={filterButtonClass(rewardFilter === 'redeemed')}
+                    onClick={() => setRewardFilter('redeemed')}
+                  >
+                    已兑换
+                  </button>
+                  <button 
+                    className={filterButtonClass(rewardFilter === 'all')}
+                    onClick={() => setRewardFilter('all')}
+                  >
+                    全部
+                  </button>
+                </div>
               </div>
               <RewardQuickAdd onAdd={handleQuickAddReward} />
               <RewardList 
@@ -476,6 +509,8 @@ export default function TasksPage() {
                   setIsRewardDialogOpen(true);
                 }}
                 onEditClick={handleEditReward}
+                filter={getRewardStatus(rewardFilter)}
+                hideHeader={true}
               />
             </div>
           </div>
@@ -486,13 +521,13 @@ export default function TasksPage() {
       <HabitEditDialog
         isOpen={isHabitDialogOpen}
         onClose={() => setIsHabitDialogOpen(false)}
-        onSave={handleSaveHabit}
+        onSave={(habitData) => handleSaveHabit(habitData)}
       />
 
       <DailyEditDialog
         isOpen={isDailyDialogOpen}
         onClose={() => setIsDailyDialogOpen(false)}
-        onSave={handleSaveDaily}
+        onSave={(dailyData) => handleSaveDaily(dailyData)}
       />
       
       <RewardEditDialog

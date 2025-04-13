@@ -84,7 +84,7 @@ export default function EmailPasswordRegisterForm() {
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute inset-y-0 right-0 flex items-center pr-3 mt-1"
+            className="absolute inset-y-0 right-0 flex items-center pr-3"
           >
             {showPassword ? (
               <svg className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -119,7 +119,7 @@ export default function EmailPasswordRegisterForm() {
           <button
             type="button"
             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-            className="absolute inset-y-0 right-0 flex items-center pr-3 mt-1"
+            className="absolute inset-y-0 right-0 flex items-center pr-3"
           >
             {showConfirmPassword ? (
               <svg className="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -143,4 +143,4 @@ export default function EmailPasswordRegisterForm() {
       </button>
     </form>
   );
-} 
+}
