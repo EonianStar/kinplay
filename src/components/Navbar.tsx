@@ -106,7 +106,7 @@ export default function Navbar() {
                   priority
                 />
                 <span className="text-yellow-600 font-medium">
-                  {stats?.coins || 0}
+                  {stats?.totalPoints || 0}
                 </span>
               </div>
 
@@ -180,7 +180,7 @@ export default function Navbar() {
                         onClick={handleSignOut}
                         className="block w-full text-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       >
-                        退出登录
+                        退出
                       </button>
                     </div>
                   </div>

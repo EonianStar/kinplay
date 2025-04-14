@@ -25,7 +25,7 @@ export default function TaskList({ tasks = [] }: TaskListProps) {
 
   const handleEditComplete = async (taskData: any) => {
     // 这里处理任务编辑逻辑
-    console.log(&quot;编辑任务&quot;, taskData);
+    console.log("编辑任务", taskData);
     setIsEditDialogOpen(false);
     setEditingTask(null);
   };
