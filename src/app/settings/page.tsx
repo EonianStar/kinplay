@@ -10,7 +10,7 @@ export default function SettingsPage() {
   const { user } = useAuth();
 
   // 检查用户是否使用邮箱密码方式注册
-  const isEmailPasswordUser = user?.providerData?.[0]?.providerId === 'password';
+  const isEmailPasswordUser = user?.app_metadata?.provider === 'email';
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -65,4 +65,4 @@ export default function SettingsPage() {
       </main>
     </div>
   );
-} 
+}
