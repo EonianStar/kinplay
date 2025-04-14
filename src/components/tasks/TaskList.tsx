@@ -25,7 +25,7 @@ export default function TaskList({ tasks = [] }: TaskListProps) {
 
   const handleEditComplete = async (taskData: any) => {
     // 这里处理任务编辑逻辑
-    console.log('编辑任务:', taskData);
+    console.log(&quot;编辑任务&quot;, taskData);
     setIsEditDialogOpen(false);
     setEditingTask(null);
   };
@@ -36,7 +36,7 @@ export default function TaskList({ tasks = [] }: TaskListProps) {
       
       {localTasks.length === 0 ? (
         <div className="text-center py-8 text-gray-500">
-          暂无任务，点击上方"添加任务"按钮创建新任务
+          暂无任务，点击上方&quot;添加任务&quot;按钮创建新任务
         </div>
       ) : (
         <ul className="space-y-3">
@@ -96,4 +96,4 @@ export default function TaskList({ tasks = [] }: TaskListProps) {
       />
     </div>
   );
-} 
+}
