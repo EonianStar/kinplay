@@ -5,6 +5,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import Navbar from '@/components/layout/Navbar';
 import { Toaster } from 'react-hot-toast';
 import OverdueChecker from '@/components/OverdueChecker';
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -28,6 +29,7 @@ export default function RootLayout({
           </main>
           <Toaster />
           <OverdueChecker />
+          <SpeedInsights />
         </AuthProvider>
       </body>
     </html>
