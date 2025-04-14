@@ -168,7 +168,7 @@ export default function Navbar() {
                 </button>
 
                 {showUserMenu && (
-                  <div className="origin-top-right absolute right-0 mt-2 w-20 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+                  <div className="origin-top-right absolute right-0 mt-2 w-16 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
                     <div className="py-1">
                       <Link
                         href="/settings"
@@ -180,7 +180,7 @@ export default function Navbar() {
                         onClick={handleSignOut}
                         className="block w-full text-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       >
-                        退出
+                        退出登录
                       </button>
                     </div>
                   </div>
@@ -248,4 +248,4 @@ export default function Navbar() {
       )}
     </nav>
   );
-} 
+}
