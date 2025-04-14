@@ -10,6 +10,7 @@ interface AuthContextType {
   loading: boolean;
   timezone: string;
   signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   signInWithEmailPassword: (email: string, password: string) => Promise<void>;
   signInWithWeChat: () => Promise<void>;
@@ -22,6 +23,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   timezone: 'UTC',
   signIn: async () => { throw new Error('AuthContext not initialized'); },
+  signUp: async () => { throw new Error('AuthContext not initialized'); },
   signOut: async () => { throw new Error('AuthContext not initialized'); },
   signInWithEmailPassword: async () => { throw new Error('AuthContext not initialized'); },
   signInWithWeChat: async () => { throw new Error('AuthContext not initialized'); },
@@ -102,6 +104,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
+  const signUp = async (email: string, password: string) => {
+    try {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) throw error;
+    } catch (error) {
+      console.error('注册失败:', error);
+      throw error;
+    }
+  };
+
   const signInWithEmailPassword = async (email: string, password: string) => {
     return signIn(email, password);
   };
@@ -145,6 +157,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     loading,
     timezone,
     signIn,
+    signUp,
     signOut,
     signInWithEmailPassword,
     signInWithWeChat,
