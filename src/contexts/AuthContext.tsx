@@ -13,6 +13,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   signInWithEmailPassword: (email: string, password: string) => Promise<void>;
   signInWithWeChat: () => Promise<void>;
+  updateUserProfile: (updates: { photoURL?: string; displayName?: string }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -24,6 +25,7 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => { throw new Error('AuthContext not initialized'); },
   signInWithEmailPassword: async () => { throw new Error('AuthContext not initialized'); },
   signInWithWeChat: async () => { throw new Error('AuthContext not initialized'); },
+  updateUserProfile: async () => { throw new Error('AuthContext not initialized'); },
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -117,6 +119,26 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
+  const updateUserProfile = async (updates: { photoURL?: string; displayName?: string }) => {
+    try {
+      const { data, error } = await supabase.auth.updateUser({
+        data: {
+          avatar_url: updates.photoURL,
+          display_name: updates.displayName
+        }
+      });
+      if (error) throw error;
+      
+      // 更新本地用户状态
+      if (data.user) {
+        setUser(data.user);
+      }
+    } catch (error) {
+      console.error('更新用户信息失败:', error);
+      throw error;
+    }
+  };
+
   const value = {
     user,
     session,
@@ -126,7 +148,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     signOut,
     signInWithEmailPassword,
     signInWithWeChat,
+    updateUserProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}; 
+};
