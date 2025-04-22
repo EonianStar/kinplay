@@ -6,11 +6,12 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserStats } from '@/services/userStats';
 import { UserEventType, subscribeToUserEvent } from '@/services/userEvents';
-import { TbCoin } from "react-icons/tb";
-import ClientOnly from "../ClientOnly";
+// 由于找不到 react-icons/tb 模块，移除该导入
+// 该组件使用了自定义的 SVG 图标替代
+// 由于找不到 ClientOnly 模块，暂时移除该导入
 import { Menu } from "@headlessui/react";
-import { HamburgerMenuIcon } from "@radix-ui/react-icons";
-import { useSupabase } from '@/app/supabase-provider';
+// 移除 @radix-ui/react-icons 导入，因为找不到该模块
+// 由于找不到 supabase-provider 模块，暂时移除该导入
 import Image from 'next/image';
 import { useSoundEffects } from '@/hooks/useSoundEffects';
 

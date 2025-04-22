@@ -333,7 +333,7 @@ const HabitList = forwardRef<HabitListRef, HabitListProps>(function HabitList(pr
       });
     },
     addHabitItem: (habit: Habit) => {
-      setHabits(prev => [...prev, habit]);
+      setHabits(prev => [habit, ...prev]);
     }
   }));
 
@@ -353,8 +353,9 @@ const HabitList = forwardRef<HabitListRef, HabitListProps>(function HabitList(pr
         bad_count: 0,
         tags: []
       };
-      await createHabit(habitData);
-      await loadHabits();
+      const newHabit = await createHabit(habitData);
+      // 直接添加到前端列表，不重新加载
+      setHabits(prev => [newHabit, ...prev]);
     } catch (error) {
       console.error('创建习惯失败:', error);
     }

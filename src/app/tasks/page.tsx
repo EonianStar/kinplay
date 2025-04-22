@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -34,7 +34,8 @@ import { RewardListRef } from '@/components/rewards/RewardList';
 
 export default function TasksPage() {
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, user, loading } = useAuth();
+  const [isClient, setIsClient] = useState(false);
   const [isHabitDialogOpen, setIsHabitDialogOpen] = useState(false);
   const [isDailyDialogOpen, setIsDailyDialogOpen] = useState(false);
   const [isHabitHelpOpen, setIsHabitHelpOpen] = useState(false);
@@ -52,12 +53,43 @@ export default function TasksPage() {
   const todoListRef = useRef<TodoListRef | null>(null);
   const rewardListRef = useRef<RewardListRef | null>(null);
 
+  // 确保组件只在客户端渲染
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // 检查认证状态
+  useEffect(() => {
+    if (isClient && !loading && !user) {
+      router.replace('/login');
+    }
+  }, [isClient, loading, user, router]);
+
+  // 包装异步操作的错误处理
+  const safeAsyncOperation = async <T,>(
+    operation: () => Promise<T>,
+    errorMessage: string = '操作失败，请重试'
+  ): Promise<T | null> => {
+    try {
+      return await operation();
+    } catch (error: any) {
+      console.error(errorMessage, error);
+      toast.error(`${errorMessage}: ${error?.message || '请重试'}`);
+      return null;
+    }
+  };
+
   const handleSaveHabit = async (habitData: CreateHabitRequest | UpdateHabitRequest) => {
     try {
       // 区分新建和编辑
       if ('id' in habitData) {
         // 更新现有习惯
-        const updatedHabit = await updateHabit(habitData.id, habitData);
+        const updatedHabit = await safeAsyncOperation<Habit>(
+          () => updateHabit(habitData.id, habitData),
+          '更新习惯失败'
+        );
+        if (!updatedHabit) return;
+        
         setIsHabitDialogOpen(false);
         
         // 只更新修改的单个习惯条目
@@ -66,7 +98,12 @@ export default function TasksPage() {
         }
       } else {
         // 创建新习惯
-        const newHabit = await createHabit(habitData);
+        const newHabit = await safeAsyncOperation<Habit>(
+          () => createHabit(habitData),
+          '创建习惯失败'
+        );
+        if (!newHabit) return;
+        
         setIsHabitDialogOpen(false);
         
         // 添加新习惯到列表
@@ -76,7 +113,7 @@ export default function TasksPage() {
       }
     } catch (error: any) {
       console.error('处理习惯失败:', error);
-      toast.error(`操作失败: ${error.message || '请重试'}`);
+      toast.error(`操作失败: ${error?.message || '请重试'}`);
     }
   };
 
@@ -85,7 +122,12 @@ export default function TasksPage() {
       // 区分新建和编辑
       if ('id' in dailyData && dailyData.id) {
         // 更新现有日常任务
-        const updatedDaily = await updateDaily(dailyData.id, dailyData as UpdateDailyRequest);
+        const updatedDaily = await safeAsyncOperation<Daily>(
+          () => updateDaily(dailyData.id as string, dailyData as UpdateDailyRequest),
+          '更新日常任务失败'
+        );
+        if (!updatedDaily) return;
+        
         setIsDailyDialogOpen(false);
         
         // 只更新修改的单个日常任务条目
@@ -94,7 +136,12 @@ export default function TasksPage() {
         }
       } else {
         // 创建新日常任务
-        const newDaily = await createDaily(dailyData as CreateDailyRequest);
+        const newDaily = await safeAsyncOperation<Daily>(
+          () => createDaily(dailyData as CreateDailyRequest),
+          '创建日常任务失败'
+        );
+        if (!newDaily) return;
+        
         setIsDailyDialogOpen(false);
         
         // 添加新日常任务到列表
@@ -104,7 +151,7 @@ export default function TasksPage() {
       }
     } catch (error: any) {
       console.error('处理日常任务失败:', error);
-      toast.error(`操作失败: ${error.message || '请重试'}`);
+      toast.error(`操作失败: ${error?.message || '请重试'}`);
     }
   };
   
@@ -113,7 +160,11 @@ export default function TasksPage() {
       // 区分新建和编辑
       if ('id' in todoData && todoData.id) {
         // 更新现有待办事项
-        const updatedTodo = await updateTodo(todoData.id, todoData as UpdateTodoRequest);
+        const updatedTodo = await safeAsyncOperation<Todo>(
+          () => updateTodo(todoData.id as string, todoData as UpdateTodoRequest),
+          '更新待办事项失败'
+        );
+        if (!updatedTodo) return;
         
         // 只更新修改的单个待办事项条目
         if (todoListRef.current) {
@@ -121,7 +172,11 @@ export default function TasksPage() {
         }
       } else {
         // 创建新待办事项
-        const newTodo = await createTodo(todoData as CreateTodoRequest);
+        const newTodo = await safeAsyncOperation<Todo>(
+          () => createTodo(todoData as CreateTodoRequest),
+          '创建待办事项失败'
+        );
+        if (!newTodo) return;
         
         // 添加新待办事项到列表
         if (todoListRef.current) {
@@ -130,7 +185,7 @@ export default function TasksPage() {
       }
     } catch (error: any) {
       console.error('处理待办事项失败:', error);
-      toast.error(`操作失败: ${error.message || '请重试'}`);
+      toast.error(`操作失败: ${error?.message || '请重试'}`);
     }
   };
 
@@ -139,7 +194,12 @@ export default function TasksPage() {
       // 区分新建和编辑
       if ('id' in rewardData) {
         // 更新现有奖励
-        const updatedReward = await updateReward(rewardData as UpdateRewardRequest);
+        const updatedReward = await safeAsyncOperation<Reward>(
+          () => updateReward(rewardData as UpdateRewardRequest),
+          '更新奖励失败'
+        );
+        if (!updatedReward) return;
+        
         setIsRewardDialogOpen(false);
         
         // 只更新修改的单个奖励条目
@@ -148,7 +208,12 @@ export default function TasksPage() {
         }
       } else {
         // 创建新奖励
-        const newReward = await createReward(rewardData);
+        const newReward = await safeAsyncOperation<Reward>(
+          () => createReward(rewardData),
+          '创建奖励失败'
+        );
+        if (!newReward) return;
+        
         setIsRewardDialogOpen(false);
         
         // 添加新奖励到列表而不是刷新整个列表
@@ -158,7 +223,7 @@ export default function TasksPage() {
       }
     } catch (error: any) {
       console.error('处理奖励失败:', error);
-      toast.error(`操作失败: ${error.message || '请重试'}`);
+      toast.error(`操作失败: ${error?.message || '请重试'}`);
     }
   };
 
@@ -198,7 +263,11 @@ export default function TasksPage() {
         tags: []
       };
       
-      const newDaily = await createDaily(dailyData);
+      const newDaily = await safeAsyncOperation<Daily>(
+        () => createDaily(dailyData),
+        '快速创建日常任务失败'
+      );
+      if (!newDaily) return;
       
       // 添加新日常任务到列表
       if (dailyListRef.current) {
@@ -206,7 +275,7 @@ export default function TasksPage() {
       }
     } catch (error: any) {
       console.error('快速创建日常任务失败:', error);
-      toast.error(`创建失败: ${error.message || '请重试'}`);
+      toast.error(`创建失败: ${error?.message || '请重试'}`);
     }
   };
 
@@ -225,15 +294,19 @@ export default function TasksPage() {
         tags: []
       };
       
-      const newTodo = await createTodo(todoData);
+      const createdTodo = await safeAsyncOperation<Todo>(
+        () => createTodo(todoData),
+        '快速创建待办事项失败'
+      );
+      if (!createdTodo) return;
       
       // 添加新待办事项到列表
       if (todoListRef.current) {
-        todoListRef.current.addTodoItem(newTodo);
+        todoListRef.current.addTodoItem(createdTodo);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('创建待办事项失败:', error);
-      toast.error('创建失败，请重试');
+      toast.error(`创建失败: ${error?.message || '请重试'}`);
     }
   };
 
@@ -241,22 +314,26 @@ export default function TasksPage() {
   const handleQuickAddReward = async (title: string) => {
     try {
       // 使用默认值创建奖励
-      const newReward = {
+      const rewardData: CreateRewardRequest = {
         title,
         description: '',
         icon: DEFAULT_REWARD.icon,
         price: DEFAULT_REWARD.price
       };
       
-      const createdReward = await createReward(newReward);
+      const createdReward = await safeAsyncOperation<Reward>(
+        () => createReward(rewardData),
+        '快速创建奖励失败'
+      );
+      if (!createdReward) return;
       
-      // 添加新奖励到列表而不是刷新整个列表
+      // 添加新奖励到列表
       if (rewardListRef.current) {
         rewardListRef.current.addRewardItem(createdReward);
       }
-    } catch (error) {
-      console.error('创建奖励失败:', error);
-      toast.error('创建奖励失败，请重试');
+    } catch (error: any) {
+      console.error('快速创建奖励失败:', error);
+      toast.error(`创建失败: ${error?.message || '请重试'}`);
     }
   };
 

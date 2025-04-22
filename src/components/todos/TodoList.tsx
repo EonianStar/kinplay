@@ -371,7 +371,7 @@ const TodoList = forwardRef<TodoListRef, TodoListProps>(function TodoList(props,
             });
           },
           addTodoItem: (todo: Todo) => {
-            setTodos(prev => [...prev, todo]);
+            setTodos(prev => [todo, ...prev]);
           }
         });
       } else {
@@ -391,7 +391,7 @@ const TodoList = forwardRef<TodoListRef, TodoListProps>(function TodoList(props,
             });
           },
           addTodoItem: (todo: Todo) => {
-            setTodos(prev => [...prev, todo]);
+            setTodos(prev => [todo, ...prev]);
           }
         };
       }

@@ -120,6 +120,13 @@ export async function createDaily(dailyData: CreateDailyRequest): Promise<Daily>
       throw new Error('缺少必填字段');
     }
 
+    // 确保活跃模式包含 target 和 clicked_count 属性
+    const activePattern = {
+      ...dailyData.active_pattern,
+      target: dailyData.active_pattern.target || 1, // 默认目标为1次
+      clicked_count: 0 // 初始点击次数为0
+    };
+
     // 处理数据
     const newDaily = {
       user_id: userId,
@@ -128,7 +135,7 @@ export async function createDaily(dailyData: CreateDailyRequest): Promise<Daily>
       difficulty: dailyData.difficulty,
       start_date: dailyData.start_date,
       repeat_period: dailyData.repeat_period,
-      active_pattern: dailyData.active_pattern,
+      active_pattern: activePattern,
       streak_count: dailyData.streak_count || 0,
       tags: dailyData.tags?.filter(Boolean) || [],
       created_at: new Date().toISOString(),
@@ -424,8 +431,7 @@ export async function updateDailyStreak(dailyId: string, increment: boolean): Pr
             user_id: userId,
             completed_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
-            experience_gained: experience,
-            coins_gained: coins
+            experience_gained: experience
           });
       } catch (error) {
         console.error('添加日常任务完成记录或奖励失败:', error);
@@ -549,6 +555,278 @@ export async function updateDailiesOrder(dailyIds: string[]): Promise<boolean> {
     return true;
   } catch (error) {
     console.error('更新日常任务顺序失败:', error);
+    throw error;
+  }
+}
+
+// 更新所有日常任务的活跃模式，添加 target 属性
+export async function updateAllDailiesWithTarget(): Promise<boolean> {
+  try {
+    const { data: authData, error: authError } = await supabase.auth.getSession();
+    if (authError || !authData.session) {
+      throw new Error('用户未登录');
+    }
+
+    const userId = authData.session.user.id;
+
+    // 获取所有日常任务
+    const { data: dailies, error: fetchError } = await supabase
+      .from('dailies')
+      .select('id, active_pattern')
+      .eq('user_id', userId);
+
+    if (fetchError) {
+      console.error('获取日常任务失败:', fetchError);
+      throw fetchError;
+    }
+
+    if (!dailies || dailies.length === 0) {
+      console.log('没有找到需要更新的日常任务');
+      return true;
+    }
+
+    // 更新每个日常任务的活跃模式，添加 target 属性
+    const updatePromises = dailies.map(async (daily) => {
+      const activePattern = daily.active_pattern;
+      
+      // 如果已经有 target 属性，跳过
+      if (activePattern && activePattern.target !== undefined) {
+        return true;
+      }
+
+      // 添加 target 属性，默认值为 1
+      const updatedActivePattern = {
+        ...activePattern,
+        target: 1
+      };
+
+      const { error: updateError } = await supabase
+        .from('dailies')
+        .update({ active_pattern: updatedActivePattern })
+        .eq('id', daily.id)
+        .eq('user_id', userId);
+
+      if (updateError) {
+        console.error(`更新日常任务 ${daily.id} 失败:`, updateError);
+        throw updateError;
+      }
+      
+      return true;
+    });
+
+    await Promise.all(updatePromises);
+    console.log(`成功更新了 ${dailies.length} 个日常任务的活跃模式`);
+    
+    return true;
+  } catch (error) {
+    console.error('更新日常任务活跃模式失败:', error);
+    throw error;
+  }
+}
+
+// 增加日常任务的点击次数
+export async function incrementDailyClickedCount(dailyId: string): Promise<Daily> {
+  try {
+    const { data: authData, error: authError } = await supabase.auth.getSession();
+    if (authError || !authData.session) {
+      throw new Error('用户未登录');
+    }
+
+    const userId = authData.session.user.id;
+
+    // 先获取当前日常任务信息
+    const { data: daily, error: getError } = await supabase
+      .from('dailies')
+      .select('*')
+      .eq('id', dailyId)
+      .eq('user_id', userId)
+      .single();
+
+    if (getError) {
+      console.error('获取日常任务信息失败:', getError);
+      throw getError;
+    }
+
+    // 获取当前的活跃模式和点击次数
+    const currentActivePattern = daily.active_pattern || {};
+    const currentClickedCount = currentActivePattern.clicked_count || 0;
+    const target = currentActivePattern.target || 1;
+
+    // 增加点击次数
+    const newClickedCount = currentClickedCount + 1;
+    
+    // 更新活跃模式
+    const updatedActivePattern = {
+      ...currentActivePattern,
+      clicked_count: newClickedCount
+    };
+
+    // 更新日常任务
+    const { data: updatedDaily, error: updateError } = await supabase
+      .from('dailies')
+      .update({
+        active_pattern: updatedActivePattern,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', dailyId)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error('更新日常任务点击次数失败:', updateError);
+      throw updateError;
+    }
+
+    // 如果点击次数达到或超过目标，可以在这里触发奖励逻辑
+    if (newClickedCount >= target) {
+      console.log(`日常任务 ${daily.title} 点击次数已达到目标 ${target}`);
+      // 可以在这里添加奖励逻辑
+    }
+
+    // 获取子任务
+    const { data: checklist, error: checklistError } = await supabase
+      .from('daily_tasks')
+      .select('*')
+      .eq('daily_id', dailyId)
+      .order('created_at', { ascending: true });
+
+    if (checklistError) {
+      console.error('获取日常任务子任务失败:', checklistError);
+      return { ...updatedDaily, checklist: [] };
+    }
+
+    return { ...updatedDaily, checklist: checklist || [] };
+  } catch (error) {
+    console.error('增加日常任务点击次数失败:', error);
+    throw error;
+  }
+}
+
+// 重置日常任务的点击次数
+export async function resetDailyClickedCount(dailyId: string): Promise<Daily> {
+  try {
+    const { data: authData, error: authError } = await supabase.auth.getSession();
+    if (authError || !authData.session) {
+      throw new Error('用户未登录');
+    }
+
+    const userId = authData.session.user.id;
+
+    // 先获取当前日常任务信息
+    const { data: daily, error: getError } = await supabase
+      .from('dailies')
+      .select('*')
+      .eq('id', dailyId)
+      .eq('user_id', userId)
+      .single();
+
+    if (getError) {
+      console.error('获取日常任务信息失败:', getError);
+      throw getError;
+    }
+
+    // 获取当前的活跃模式
+    const currentActivePattern = daily.active_pattern || {};
+    
+    // 更新活跃模式，重置点击次数
+    const updatedActivePattern = {
+      ...currentActivePattern,
+      clicked_count: 0
+    };
+
+    // 更新日常任务
+    const { data: updatedDaily, error: updateError } = await supabase
+      .from('dailies')
+      .update({
+        active_pattern: updatedActivePattern,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', dailyId)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (updateError) {
+      console.error('重置日常任务点击次数失败:', updateError);
+      throw updateError;
+    }
+
+    // 获取子任务
+    const { data: checklist, error: checklistError } = await supabase
+      .from('daily_tasks')
+      .select('*')
+      .eq('daily_id', dailyId)
+      .order('created_at', { ascending: true });
+
+    if (checklistError) {
+      console.error('获取日常任务子任务失败:', checklistError);
+      return { ...updatedDaily, checklist: [] };
+    }
+
+    return { ...updatedDaily, checklist: checklist || [] };
+  } catch (error) {
+    console.error('重置日常任务点击次数失败:', error);
+    throw error;
+  }
+}
+
+// 批量重置所有日常任务的点击次数（可在每日零点调用）
+export async function resetAllDailiesClickedCount(): Promise<boolean> {
+  try {
+    const { data: authData, error: authError } = await supabase.auth.getSession();
+    if (authError || !authData.session) {
+      throw new Error('用户未登录');
+    }
+
+    const userId = authData.session.user.id;
+
+    // 获取所有日常任务
+    const { data: dailies, error: fetchError } = await supabase
+      .from('dailies')
+      .select('id, active_pattern')
+      .eq('user_id', userId);
+
+    if (fetchError) {
+      console.error('获取日常任务失败:', fetchError);
+      throw fetchError;
+    }
+
+    if (!dailies || dailies.length === 0) {
+      console.log('没有找到需要重置的日常任务');
+      return true;
+    }
+
+    // 更新每个日常任务的活跃模式，重置点击次数
+    const updatePromises = dailies.map(async (daily) => {
+      const activePattern = daily.active_pattern || {};
+      
+      // 重置点击次数
+      const updatedActivePattern = {
+        ...activePattern,
+        clicked_count: 0
+      };
+
+      const { error: updateError } = await supabase
+        .from('dailies')
+        .update({ active_pattern: updatedActivePattern })
+        .eq('id', daily.id)
+        .eq('user_id', userId);
+
+      if (updateError) {
+        console.error(`重置日常任务 ${daily.id} 点击次数失败:`, updateError);
+        throw updateError;
+      }
+      
+      return true;
+    });
+
+    await Promise.all(updatePromises);
+    console.log(`成功重置了 ${dailies.length} 个日常任务的点击次数`);
+    
+    return true;
+  } catch (error) {
+    console.error('重置日常任务点击次数失败:', error);
     throw error;
   }
 } 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, forwardRef, useImperativeHandle, useRef } from 'react';
 import { Daily, DailyDifficulty, UpdateDailyRequest, CreateDailyRequest, DailyTask, DailyRepeatPeriod } from '@/types/daily';
-import { getDailies, deleteDaily, updateDailyStreak, updateDaily, updateDailiesOrder } from '@/services/dailies';
+import { getDailies, deleteDaily, updateDailyStreak, updateDaily, updateDailiesOrder, incrementDailyClickedCount } from '@/services/dailies';
 import DailyEditDialog from './DailyEditDialog';
 import { Menu } from '@headlessui/react';
 import { 
@@ -38,9 +38,18 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '@/lib/supabase';
-import { getColorByValueLevel, ValueLevel } from '@/utils/valueLevel';
+import { getColorByValueLevel, ValueLevel, increaseValueLevel, decreaseValueLevel, getWeightByValueLevel } from '@/utils/valueLevel';
 import useIsMobile from '@/hooks/useIsMobile';
 import MobileOrderButtons from '@/components/common/MobileOrderButtons';
+import { toast } from 'react-hot-toast';
+import { 
+  calculateExperience, 
+  calculateCoins,
+  BASE_EXPERIENCE,
+  getTaskTypeWeight,
+  getDifficultyWeight
+} from '@/utils/rewardsCalculator';
+import { addExp, addCoins } from '@/services/userStats';
 
 interface DailyListProps {
   onAddClick?: () => void;
@@ -83,6 +92,7 @@ interface SortableDailyItemProps {
   onMoveDown: () => void;
   isFirst: boolean;
   isLast: boolean;
+  isCompleting: boolean;
 }
 
 // 可拖拽的日常任务项组件
@@ -104,7 +114,8 @@ const SortableDailyItem = ({
   onMoveUp,
   onMoveDown,
   isFirst,
-  isLast
+  isLast,
+  isCompleting
 }: SortableDailyItemProps) => {
   const [showMobileButtons, setShowMobileButtons] = useState(false);
   const isMobile = useIsMobile();
@@ -168,16 +179,20 @@ const SortableDailyItem = ({
       <div className="flex">
         {/* 左侧色块与复选框 */}
         <div className="w-10 flex items-center justify-center rounded-l-lg" style={{ backgroundColor: getColorByValueLevel(daily.value_level || 0) }}>
-          <input
-            type="checkbox"
-            className="h-5 w-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
-            onChange={() => onToggleComplete(daily)}
-          />
+          {isCompleting ? (
+            <div className="h-5 w-5 rounded animate-pulse bg-indigo-300"></div>
+          ) : (
+            <input
+              type="checkbox"
+              className="h-5 w-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+              onChange={() => onToggleComplete(daily)}
+            />
+          )}
         </div>
         
         {/* 主要内容区域 */}
         <div 
-          className={`flex-1 py-3 px-4 ${isMobile ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`}
+          className={`flex-1 py-3 px-4 ${isMobile ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'} ${isCompleting ? 'opacity-75' : ''}`}
           {...desktopListeners}
           onTouchStart={isMobile ? startLongPress : undefined}
           onTouchEnd={isMobile ? cancelLongPress : undefined}
@@ -271,7 +286,7 @@ const SortableDailyItem = ({
               {daily.repeat_period && (
                 <div className="max-w-[160px] break-words">
                   {daily.repeat_period === DailyRepeatPeriod.DAILY && (
-                    <span><span className="font-bold">每日</span> x {daily.active_pattern?.value || 1}次</span>
+                    <span><span className="font-bold">每日</span> x {daily.active_pattern?.target || 1}次</span>
                   )}
                   
                   {daily.repeat_period === DailyRepeatPeriod.WEEKLY && (
@@ -287,7 +302,8 @@ const SortableDailyItem = ({
                                     return option ? option.name : day;
                                   })
                                   .join(', ')
-                              : daily.active_pattern.value)
+                              : daily.active_pattern.value) + 
+                              ` x ${daily.active_pattern?.target || 1}次/日`
                           : ''}
                       </div>
                     </div>
@@ -303,7 +319,8 @@ const SortableDailyItem = ({
                                   .sort((a, b) => a - b)
                                   .map(day => `${day}日`)
                                   .join(', ')
-                              : daily.active_pattern.value)
+                              : daily.active_pattern.value) + 
+                              ` x ${daily.active_pattern?.target || 1}次/日`
                           : ''}
                       </div>
                     </div>
@@ -319,7 +336,8 @@ const SortableDailyItem = ({
                                   .sort((a, b) => a - b)
                                   .map(month => `${month}月`)
                                   .join(', ')
-                              : daily.active_pattern.value)
+                              : daily.active_pattern.value) + 
+                              ` x ${daily.active_pattern?.target || 1}次/月`
                           : ''}
                       </div>
                     </div>
@@ -374,6 +392,7 @@ export interface DailyListRef {
 }
 
 const DailyList = forwardRef<DailyListRef, DailyListProps>(({ onAddClick, filter = 'all' }, ref) => {
+  const { onAddClick: originalOnAddClick, filter: originalFilter } = { onAddClick, filter };
   const [dailies, setDailies] = useState<Daily[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -382,6 +401,9 @@ const DailyList = forwardRef<DailyListRef, DailyListProps>(({ onAddClick, filter
   const [editingDaily, setEditingDaily] = useState<Daily | null>(null);
   const [visibleTagId, setVisibleTagId] = useState<string | null>(null);
   const isMobile = useIsMobile();
+  const [userId, setUserId] = useState<string>('');
+  // 添加单个任务的加载状态
+  const [completingDailies, setCompletingDailies] = useState<{[key: string]: boolean}>({});
   
   // 拖拽相关传感器设置
   const sensors = useSensors(
@@ -425,7 +447,7 @@ const DailyList = forwardRef<DailyListRef, DailyListProps>(({ onAddClick, filter
       });
     },
     addDailyItem: (daily: Daily) => {
-      setDailies(prev => [...prev, daily]);
+      setDailies(prev => [daily, ...prev]);
     }
   }));
 
@@ -443,6 +465,17 @@ const DailyList = forwardRef<DailyListRef, DailyListProps>(({ onAddClick, filter
     });
     setExpandedDailies(initialExpandState);
   }, [dailies]);
+
+  useEffect(() => {
+    // 初始加载数据时获取用户ID
+    const getUserId = async () => {
+      const { data, error } = await supabase.auth.getSession();
+      if (data?.session?.user) {
+        setUserId(data.session.user.id);
+      }
+    };
+    getUserId();
+  }, []);
 
   const handleEdit = (daily: Daily) => {
     console.log("编辑日常任务:", daily);
@@ -505,40 +538,71 @@ const DailyList = forwardRef<DailyListRef, DailyListProps>(({ onAddClick, filter
 
   const handleToggleComplete = async (daily: Daily) => {
     try {
-      // 如果该任务有子任务，则切换所有子任务的完成状态
-      if (daily.checklist && daily.checklist.length > 0) {
-        // 检查是否所有子任务都已完成
-        const allCompleted = daily.checklist.every(task => task.completed);
+      // 设置单个任务的加载状态为true
+      setCompletingDailies(prev => ({
+        ...prev,
+        [daily.id]: true
+      }));
+      
+      // 增加日常任务的点击次数
+      const updatedDaily = await incrementDailyClickedCount(daily.id);
+      
+      // 增加连续完成次数
+      const dailyWithIncreasedStreak = await updateDailyStreak(daily.id, true);
+      
+      // 更新本地数据 - 只更新对应的任务
+      setDailies(prevDailies => 
+        prevDailies.map(item => 
+          item.id === daily.id ? { 
+            ...item, 
+            ...dailyWithIncreasedStreak,
+            active_pattern: {
+              ...dailyWithIncreasedStreak.active_pattern,
+              clicked_count: updatedDaily.active_pattern.clicked_count
+            }
+          } : item
+        )
+      );
+      
+      // 计算获得的经验值和金币
+      const exp = calculateExperience('daily', daily.difficulty, daily.value_level || 0);
+      const coins = calculateCoins('daily', daily.difficulty, daily.value_level || 0);
+      
+      // 每完成5次，提升价值等级
+      if ((daily.streak_count + 1) % 5 === 0) {
+        const updatedValue = increaseValueLevel(daily.value_level || 0);
+        console.log(`日常任务 ${daily.title} 价值等级提升至 ${updatedValue}`);
         
-        // 根据当前状态反转所有子任务的完成状态
-        const updatedChecklist = daily.checklist.map(task => ({
-          ...task,
-          completed: !allCompleted
-        }));
-        
-        // 更新子任务完成状态
-        const updatedDaily = await updateDaily(daily.id, { 
+        // 更新日常任务的价值等级
+        const dailyWithUpdatedValue = await updateDaily(daily.id, { 
           id: daily.id,
-          checklist: updatedChecklist
+          value_level: updatedValue 
         });
         
-        // 如果所有子任务完成状态由未完成变为完成，则增加连击次数
-        if (!allCompleted) {
-          const updatedDailyWithStreak = await updateDailyStreak(daily.id, true);
-          // 直接更新单个条目
-          setDailies(prev => prev.map(item => item.id === updatedDailyWithStreak.id ? updatedDailyWithStreak : item));
-        } else {
-          // 直接更新单个条目
-          setDailies(prev => prev.map(item => item.id === updatedDaily.id ? updatedDaily : item));
-        }
-      } else {
-        // 没有子任务时，每次勾选都增加连击次数
-        const updatedDaily = await updateDailyStreak(daily.id, true);
-        // 直接更新单个条目
-        setDailies(prev => prev.map(item => item.id === updatedDaily.id ? updatedDaily : item));
+        // 更新本地数据中的价值等级
+        setDailies(prevDailies => 
+          prevDailies.map(item => 
+            item.id === daily.id ? { 
+              ...item, 
+              value_level: dailyWithUpdatedValue.value_level 
+            } : item
+          )
+        );
+      }
+      
+      // 增加用户经验和金币
+      if (userId) {
+        await addExp(userId, exp);
+        await addCoins(userId, coins);
       }
     } catch (error) {
-      console.error('更新任务状态失败:', error);
+      console.error('完成日常任务失败:', error);
+    } finally {
+      // 设置单个任务的加载状态为false
+      setCompletingDailies(prev => ({
+        ...prev,
+        [daily.id]: false
+      }));
     }
   };
 
@@ -647,16 +711,15 @@ const DailyList = forwardRef<DailyListRef, DailyListProps>(({ onAddClick, filter
     const date = today.getDate();
     const dayOfWeek = today.getDay() === 0 ? 7 : today.getDay(); // 转换为1-7表示周一到周日
     
-    // 检查日常任务是否已完成
-    const isCompleted = daily.checklist && daily.checklist.length > 0 
-      ? daily.checklist.every(task => task.completed)
-      : false; // Daily类型没有completed属性，默认为false
-    
-    // 如果已完成，则不活跃
-    if (isCompleted) return false;
-    
     // 根据重复周期判断
     if (!daily.active_pattern || !daily.repeat_period) return true;
+    
+    // 检查点击次数是否已达到目标
+    const clickedCount = daily.active_pattern.clicked_count || 0;
+    const target = daily.active_pattern.target || 1;
+    
+    // 如果点击次数已达到或超过目标，则不活跃
+    if (clickedCount >= target) return false;
     
     switch (daily.repeat_period) {
       case DailyRepeatPeriod.DAILY:
@@ -797,6 +860,7 @@ const DailyList = forwardRef<DailyListRef, DailyListProps>(({ onAddClick, filter
                 onMoveDown={() => handleMoveDown(daily.id)}
                 isFirst={index === 0}
                 isLast={index === filteredDailies.length - 1}
+                isCompleting={completingDailies[daily.id] || false}
               />
             ))}
           </SortableContext>

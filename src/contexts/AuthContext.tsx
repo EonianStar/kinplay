@@ -55,6 +55,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         
         if (error) {
           console.error('获取会话失败:', error);
+          setLoading(false);
           return;
         }
         
@@ -62,25 +63,53 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setSession(data.session);
           setUser(data.session.user);
         }
+        setLoading(false);
       } catch (error) {
         console.error('获取会话时出错:', error);
-      } finally {
         setLoading(false);
       }
     };
 
     getSession();
 
-    // 监听认证状态变化
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, newSession) => {
-      setSession(newSession);
-      setUser(newSession?.user || null);
+    // 监听认证状态变化 - 修复异步消息通道问题
+    let authSubscription: { data: { subscription: { unsubscribe: () => void } } } | null = null;
+    
+    try {
+      // 使用try-catch包裹，防止未处理的异常
+      authSubscription = supabase.auth.onAuthStateChange((event, newSession) => {
+        // 确保在组件挂载状态下更新状态
+        setSession((prevSession) => {
+          if (newSession !== prevSession) {
+            return newSession;
+          }
+          return prevSession;
+        });
+        
+        setUser((prevUser) => {
+          const newUser = newSession?.user || null;
+          if (JSON.stringify(newUser) !== JSON.stringify(prevUser)) {
+            return newUser;
+          }
+          return prevUser;
+        });
+        
+        setLoading(false);
+      });
+    } catch (error) {
+      console.error('设置认证状态监听器失败:', error);
       setLoading(false);
-    });
+    }
 
     return () => {
-      // 清理订阅
-      authListener.subscription.unsubscribe();
+      // 清理订阅 - 防止出现错误
+      try {
+        if (authSubscription?.data?.subscription?.unsubscribe) {
+          authSubscription.data.subscription.unsubscribe();
+        }
+      } catch (error) {
+        console.error('清理认证状态监听器失败:', error);
+      }
     };
   }, []);
 

@@ -41,8 +41,50 @@ export async function getUserStats(userId: string): Promise<UserStats | null> {
       .maybeSingle();
 
     if (error) {
-      console.error('获取用户统计数据错误:', error);
-      throw new Error(`获取用户统计数据失败: ${error.message}`);
+      // 检查是否是因为没有找到数据导致的错误
+      if (error.code === 'PGRST116' || error.message.includes('no rows')) {
+        console.log('用户统计数据不存在，准备初始化');
+        await initializeUserStats(userId);
+        
+        // 重新获取初始化后的数据
+        const { data: newData, error: newError } = await supabase
+          .from('user_stats')
+          .select('*')
+          .eq('user_id', userId)
+          .maybeSingle();
+          
+        if (newError) {
+          console.error('初始化后获取用户统计数据错误:', newError);
+          throw new Error(`初始化后获取用户统计数据失败: ${newError.message}`);
+        }
+        
+        console.log('初始化后获取到的用户统计数据:', newData);
+        return newData;
+      } else {
+        console.error('获取用户统计数据错误:', error);
+        throw new Error(`获取用户统计数据失败: ${error.message}`);
+      }
+    }
+
+    // 如果没有数据，自动初始化
+    if (!data) {
+      console.log('用户统计数据为空，准备初始化');
+      await initializeUserStats(userId);
+      
+      // 重新获取初始化后的数据
+      const { data: newData, error: newError } = await supabase
+        .from('user_stats')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+        
+      if (newError) {
+        console.error('初始化后获取用户统计数据错误:', newError);
+        throw new Error(`初始化后获取用户统计数据失败: ${newError.message}`);
+      }
+      
+      console.log('初始化后获取到的用户统计数据:', newData);
+      return newData;
     }
 
     console.log('获取到的用户统计数据:', data);
@@ -152,11 +194,24 @@ export async function addExp(userId: string, amount: number): Promise<void> {
       .from('user_stats')
       .select('exp')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
     
     if (getError) {
+      // 检查是否是因为没有找到数据导致的错误
+      if (getError.code === 'PGRST116' || getError.message.includes('no rows')) {
+        console.log('用户统计数据不存在，准备初始化');
+        await initializeUserStats(userId);
+        return await addExp(userId, amount); // 初始化后重新调用
+      }
       console.error('获取用户经验值失败:', getError);
       throw new Error(`获取用户经验值失败: ${getError.message}`);
+    }
+    
+    // 如果没有数据，自动初始化
+    if (!stats) {
+      console.log('用户统计数据为空，准备初始化');
+      await initializeUserStats(userId);
+      return await addExp(userId, amount); // 初始化后重新调用
     }
     
     // 计算新的经验值（当前值 + 新增值）
@@ -198,11 +253,24 @@ export async function addCoins(userId: string, amount: number): Promise<void> {
       .from('user_stats')
       .select('coins')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
     
     if (getError) {
+      // 检查是否是因为没有找到数据导致的错误
+      if (getError.code === 'PGRST116' || getError.message.includes('no rows')) {
+        console.log('用户统计数据不存在，准备初始化');
+        await initializeUserStats(userId);
+        return await addCoins(userId, amount); // 初始化后重新调用
+      }
       console.error('获取用户金币失败:', getError);
       throw new Error(`获取用户金币失败: ${getError.message}`);
+    }
+    
+    // 如果没有数据，自动初始化
+    if (!stats) {
+      console.log('用户统计数据为空，准备初始化');
+      await initializeUserStats(userId);
+      return await addCoins(userId, amount); // 初始化后重新调用
     }
     
     // 计算新的金币值（当前值 + 新增值）
@@ -244,11 +312,24 @@ export async function deductExp(userId: string, amount: number): Promise<void> {
       .from('user_stats')
       .select('exp')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
     
     if (getError) {
+      // 检查是否是因为没有找到数据导致的错误
+      if (getError.code === 'PGRST116' || getError.message.includes('no rows')) {
+        console.log('用户统计数据不存在，准备初始化');
+        await initializeUserStats(userId);
+        return await deductExp(userId, amount); // 初始化后重新调用
+      }
       console.error('获取用户经验值失败:', getError);
       throw new Error(`获取用户经验值失败: ${getError.message}`);
+    }
+    
+    // 如果没有数据，自动初始化
+    if (!stats) {
+      console.log('用户统计数据为空，准备初始化');
+      await initializeUserStats(userId);
+      return await deductExp(userId, amount); // 初始化后重新调用
     }
     
     // 计算新的经验值（不能小于0）
@@ -287,11 +368,24 @@ export async function deductCoins(userId: string, amount: number): Promise<void>
       .from('user_stats')
       .select('coins')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
     
     if (getError) {
+      // 检查是否是因为没有找到数据导致的错误
+      if (getError.code === 'PGRST116' || getError.message.includes('no rows')) {
+        console.log('用户统计数据不存在，准备初始化');
+        await initializeUserStats(userId);
+        return await deductCoins(userId, amount); // 初始化后重新调用
+      }
       console.error('获取用户金币失败:', getError);
       throw new Error(`获取用户金币失败: ${getError.message}`);
+    }
+    
+    // 如果没有数据，自动初始化
+    if (!stats) {
+      console.log('用户统计数据为空，准备初始化');
+      await initializeUserStats(userId);
+      return await deductCoins(userId, amount); // 初始化后重新调用
     }
     
     // 计算新的金币（不能小于0）
@@ -360,4 +454,4 @@ export async function updateStreak(userId: string, streak: number): Promise<void
     console.error('更新连续完成天数异常:', error);
     throw error;
   }
-} 
+}

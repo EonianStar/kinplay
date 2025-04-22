@@ -126,7 +126,7 @@ export default function DailyEditDialog({
   const [description, setDescription] = useState('');
   const [difficulty, setDifficulty] = useState<DailyDifficulty>(DailyDifficulty.EASY);
   const [repeatPeriod, setRepeatPeriod] = useState<DailyRepeatPeriod>(DailyRepeatPeriod.DAILY);
-  const [activePattern, setActivePattern] = useState<ActivePattern>({ type: DailyRepeatPeriod.DAILY, value: 1 });
+  const [activePattern, setActivePattern] = useState<ActivePattern>({ type: DailyRepeatPeriod.DAILY, value: 1, target: 1 });
   const [startDate, setStartDate] = useState<string>(() => {
     const today = new Date();
     const year = today.getFullYear();
@@ -136,7 +136,7 @@ export default function DailyEditDialog({
   });
   const [tags, setTags] = useState<string[]>([]);
   const [customTag, setCustomTag] = useState('');
-  const [subtasks, setSubtasks] = useState<{ id?: string; title: string; completed: boolean }[]>([]);
+  const [subtasks, setSubtasks] = useState<{ id?: string; title: string; completed?: boolean }[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
   
   // 表单验证错误状态
@@ -153,13 +153,27 @@ export default function DailyEditDialog({
     return () => setMounted(false);
   }, []);
   
+  // 添加新的useEffect，在弹窗打开时重置表单
+  useEffect(() => {
+    if (isOpen) {
+      if (!initialData) {
+        // 只有在新建任务时才完全重置表单
+        resetForm();
+      }
+    }
+  }, [isOpen, initialData]);
+  
   // 初始化数据
   useEffect(() => {
     if (initialData) {
       // 设置其他字段
       setTitle(initialData.title || '');
       setDescription(initialData.description || '');
-      setSubtasks(initialData.checklist || []);
+      setSubtasks(initialData.checklist ? initialData.checklist.map(task => ({
+        id: task.id,
+        title: task.title,
+        completed: task.completed
+      })) : []);
       setDifficulty(initialData.difficulty || DailyDifficulty.EASY);
       
       // 确保使用本地日期，而不是直接使用ISO字符串格式
@@ -182,21 +196,24 @@ export default function DailyEditDialog({
       // 设置活跃模式 (activePattern)
       if (initialData.active_pattern) {
         console.log("活跃模式:", initialData.active_pattern);
-        // 直接使用初始数据中的活跃模式
-        setActivePattern(initialData.active_pattern);
+        // 直接使用初始数据中的活跃模式，并设置默认target值为1（如果不存在）
+        setActivePattern({
+          ...initialData.active_pattern,
+          target: initialData.active_pattern.target || 1
+        });
       } else {
         // 没有活跃模式时使用默认值
         if (initialData.repeat_period === DailyRepeatPeriod.DAILY) {
-          setActivePattern({ type: DailyRepeatPeriod.DAILY, value: 1 });
+          setActivePattern({ type: DailyRepeatPeriod.DAILY, value: 1, target: 1 });
         } else if (initialData.repeat_period === DailyRepeatPeriod.WEEKLY) {
-          setActivePattern({ type: DailyRepeatPeriod.WEEKLY, value: [] });
+          setActivePattern({ type: DailyRepeatPeriod.WEEKLY, value: [], target: 1 });
         } else if (initialData.repeat_period === DailyRepeatPeriod.MONTHLY) {
-          setActivePattern({ type: DailyRepeatPeriod.MONTHLY, value: [] });
+          setActivePattern({ type: DailyRepeatPeriod.MONTHLY, value: [], target: 1 });
         } else if (initialData.repeat_period === DailyRepeatPeriod.YEARLY) {
-          setActivePattern({ type: DailyRepeatPeriod.YEARLY, value: [] });
+          setActivePattern({ type: DailyRepeatPeriod.YEARLY, value: [], target: 1 });
         } else {
           // 默认值
-          setActivePattern({ type: DailyRepeatPeriod.DAILY, value: 1 });
+          setActivePattern({ type: DailyRepeatPeriod.DAILY, value: 1, target: 1 });
         }
       }
       
@@ -207,7 +224,7 @@ export default function DailyEditDialog({
       resetForm();
     }
     setTitleError(false);
-  }, [initialData]);
+  }, [initialData, isOpen]);
 
   // 重置表单到初始状态
   const resetForm = () => {
@@ -222,7 +239,7 @@ export default function DailyEditDialog({
     const day = String(today.getDate()).padStart(2, '0');
     setStartDate(`${year}-${month}-${day}`);
     setRepeatPeriod(DailyRepeatPeriod.DAILY);
-    setActivePattern({ type: DailyRepeatPeriod.DAILY, value: 1 });
+    setActivePattern({ type: DailyRepeatPeriod.DAILY, value: 1, target: 1 });
     setTags([]);
     setCustomTag('');
     setNewSubtask('');
@@ -288,15 +305,18 @@ export default function DailyEditDialog({
     // 先设置周期
     setRepeatPeriod(newPeriod);
     
+    // 保留当前的target值
+    const currentTarget = activePattern.target || 1;
+    
     // 根据新周期重置活跃模式数据
     if (newPeriod === DailyRepeatPeriod.DAILY) {
-      setActivePattern({ type: DailyRepeatPeriod.DAILY, value: 1 });
+      setActivePattern({ type: DailyRepeatPeriod.DAILY, value: 1, target: currentTarget });
     } else if (newPeriod === DailyRepeatPeriod.WEEKLY) {
-      setActivePattern({ type: DailyRepeatPeriod.WEEKLY, value: [] });
+      setActivePattern({ type: DailyRepeatPeriod.WEEKLY, value: [], target: currentTarget });
     } else if (newPeriod === DailyRepeatPeriod.MONTHLY) {
-      setActivePattern({ type: DailyRepeatPeriod.MONTHLY, value: [] });
+      setActivePattern({ type: DailyRepeatPeriod.MONTHLY, value: [], target: currentTarget });
     } else if (newPeriod === DailyRepeatPeriod.YEARLY) {
-      setActivePattern({ type: DailyRepeatPeriod.YEARLY, value: [] });
+      setActivePattern({ type: DailyRepeatPeriod.YEARLY, value: [], target: currentTarget });
     }
   };
 
@@ -349,6 +369,9 @@ export default function DailyEditDialog({
       return;
     }
     
+    // 确保target至少为1
+    const targetValue = activePattern.target && activePattern.target > 0 ? activePattern.target : 1;
+    
     // 构建活跃方式数据
     let activePatternToSave: ActivePattern;
     if (repeatPeriod === DailyRepeatPeriod.DAILY) {
@@ -358,22 +381,26 @@ export default function DailyEditDialog({
       
       activePatternToSave = {
         type: DailyRepeatPeriod.DAILY,
-        value: Math.min(24, Math.max(1, dailyValue)) // 限制在1-24之间
+        value: Math.min(24, Math.max(1, dailyValue)), // 限制在1-24之间
+        target: targetValue
       };
     } else if (repeatPeriod === DailyRepeatPeriod.WEEKLY) {
       activePatternToSave = {
         type: DailyRepeatPeriod.WEEKLY,
-        value: Array.isArray(activePattern.value) ? activePattern.value as WeeklyActiveDays : []
+        value: Array.isArray(activePattern.value) ? activePattern.value as WeeklyActiveDays : [],
+        target: targetValue
       };
     } else if (repeatPeriod === DailyRepeatPeriod.MONTHLY) {
       activePatternToSave = {
         type: DailyRepeatPeriod.MONTHLY,
-        value: Array.isArray(activePattern.value) ? activePattern.value as MonthlyActiveDays : []
+        value: Array.isArray(activePattern.value) ? activePattern.value as MonthlyActiveDays : [],
+        target: targetValue
       };
     } else {
       activePatternToSave = {
         type: DailyRepeatPeriod.YEARLY,
-        value: Array.isArray(activePattern.value) ? activePattern.value as YearlyActiveMonths : []
+        value: Array.isArray(activePattern.value) ? activePattern.value as YearlyActiveMonths : [],
+        target: targetValue
       };
     }
     
@@ -396,12 +423,20 @@ export default function DailyEditDialog({
         repeat_period: repeatPeriod as DailyRepeatPeriod,
         active_pattern: activePatternToSave,
         tags,
-        streak_count: streakCount,
-        checklist: subtasks.length > 0 ? subtasks.map(task => ({
-          ...task,
-          title: task.title.trim()
-        })) : undefined
+        streak_count: streakCount
       };
+      
+      // 单独处理子任务，如果有的话
+      if (subtasks.length > 0) {
+        const checklist = subtasks.map(task => ({
+          title: task.title.trim(),
+          completed: task.completed || false,
+          id: task.id
+        }));
+        
+        // @ts-ignore - 忽略类型检查
+        editData.checklist = checklist;
+      }
       
       onSave(editData);
     } else {
@@ -646,156 +681,225 @@ export default function DailyEditDialog({
               {/* 周期频次 / 活跃方式（根据重复周期显示不同内容） */}
               {repeatPeriod === DailyRepeatPeriod.DAILY && (
                 <div className="px-3 py-2 sm:p-3">
-                  <label htmlFor="dailyFrequency" className="block text-base font-medium text-gray-700 mb-1.5">
-                    每日频率
+                  <label htmlFor="dailyTarget" className="block text-base font-medium text-gray-700 mb-1.5">
+                    每日次数
                   </label>
                   <input
                     type="number"
-                    id="dailyFrequency"
+                    id="dailyTarget"
                     className="block w-full rounded-lg border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-3 py-2"
-                    value={typeof activePattern.value === 'number' ? activePattern.value : 1}
+                    value={activePattern.target || 1}
                     onChange={(e) => {
                       const value = parseInt(e.target.value);
                       setActivePattern({
-                        type: DailyRepeatPeriod.DAILY,
-                        value: isNaN(value) ? 1 : Math.min(24, Math.max(1, value))
+                        ...activePattern,
+                        target: isNaN(value) ? 1 : Math.min(744, Math.max(1, value))
                       });
                     }}
                     min={1}
-                    max={24}
+                    max={744}
                   />
                 </div>
               )}
 
               {repeatPeriod === DailyRepeatPeriod.WEEKLY && (
-                <div className="px-3 py-2 sm:p-3">
-                  <label className="block text-base font-medium text-gray-700 mb-1.5">
-                    每周哪几天
-                  </label>
-                  <div className={`flex flex-wrap gap-2 p-3 border rounded-md ${'border-gray-100'}`}>
-                    {weekDayOptions.map((day) => {
-                      // 确保我们有一个数组来处理
-                      const currentValue = Array.isArray(activePattern.value) 
-                        ? activePattern.value as number[] 
-                        : [];
-                      
-                      return (
-                        <button
-                          key={day.id}
-                          type="button"
-                          onClick={() => {
-                            if (currentValue.includes(day.id)) {
-                              setActivePattern({
-                                type: DailyRepeatPeriod.WEEKLY,
-                                value: currentValue.filter((id) => id !== day.id) as WeeklyActiveDays
-                              });
-                            } else {
-                              setActivePattern({
-                                type: DailyRepeatPeriod.WEEKLY,
-                                value: [...currentValue, day.id] as WeeklyActiveDays
-                              });
-                            }
-                          }}
-                          className={`px-3 py-1 rounded-full text-sm ${
-                            currentValue.includes(day.id)
-                              ? 'bg-indigo-600 text-white'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          }`}
-                        >
-                          {day.name}
-                        </button>
-                      );
-                    })}
+                <>
+                  <div className="px-3 py-2 sm:p-3">
+                    <label className="block text-base font-medium text-gray-700 mb-1.5">
+                      每周哪几天
+                    </label>
+                    <div className={`flex flex-wrap gap-2 p-3 border rounded-md ${'border-gray-100'}`}>
+                      {weekDayOptions.map((day) => {
+                        // 确保我们有一个数组来处理
+                        const currentValue = Array.isArray(activePattern.value) 
+                          ? activePattern.value as number[] 
+                          : [];
+                        
+                        return (
+                          <button
+                            key={day.id}
+                            type="button"
+                            onClick={() => {
+                              if (currentValue.includes(day.id)) {
+                                setActivePattern({
+                                  ...activePattern,
+                                  value: currentValue.filter((id) => id !== day.id) as WeeklyActiveDays
+                                });
+                              } else {
+                                setActivePattern({
+                                  ...activePattern,
+                                  value: [...currentValue, day.id] as WeeklyActiveDays
+                                });
+                              }
+                            }}
+                            className={`px-3 py-1 rounded-full text-sm ${
+                              currentValue.includes(day.id)
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {day.name}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                  
+                  <div className="px-3 py-2 sm:p-3">
+                    <label htmlFor="weeklyTarget" className="block text-base font-medium text-gray-700 mb-1.5">
+                      每日次数
+                    </label>
+                    <input
+                      type="number"
+                      id="weeklyTarget"
+                      className="block w-full rounded-lg border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-3 py-2"
+                      value={activePattern.target || 1}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value);
+                        setActivePattern({
+                          ...activePattern,
+                          target: isNaN(value) ? 1 : Math.min(744, Math.max(1, value))
+                        });
+                      }}
+                      min={1}
+                      max={744}
+                    />
+                  </div>
+                </>
               )}
 
               {/* 每月活跃日期选择 */}
               {repeatPeriod === DailyRepeatPeriod.MONTHLY && (
-                <div className="px-3 py-2 sm:p-3">
-                  <label className="block text-base font-medium text-gray-700 mb-1.5">
-                    每月哪几天
-                  </label>
-                  <div className={`grid grid-cols-7 gap-2 p-3 border rounded-md ${'border-gray-100'}`}>
-                    {createMonthDayOptions().map((day) => {
-                      // 确保我们有一个数组来处理
-                      const currentValue = Array.isArray(activePattern.value) 
-                        ? activePattern.value as number[] 
-                        : [];
-                      
-                      return (
-                        <button
-                          key={day.id}
-                          type="button"
-                          onClick={() => {
-                            if (currentValue.includes(day.id)) {
-                              setActivePattern({
-                                type: DailyRepeatPeriod.MONTHLY,
-                                value: currentValue.filter((id) => id !== day.id) as MonthlyActiveDays
-                              });
-                            } else {
-                              setActivePattern({
-                                type: DailyRepeatPeriod.MONTHLY,
-                                value: [...currentValue, day.id] as MonthlyActiveDays
-                              });
-                            }
-                          }}
-                          className={`px-1 py-1 rounded-full text-xs ${
-                            currentValue.includes(day.id)
-                              ? 'bg-indigo-600 text-white'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          }`}
-                        >
-                          {day.id}
-                        </button>
-                      );
-                    })}
+                <>
+                  <div className="px-3 py-2 sm:p-3">
+                    <label className="block text-base font-medium text-gray-700 mb-1.5">
+                      每月哪几天
+                    </label>
+                    <div className={`grid grid-cols-7 gap-2 p-3 border rounded-md ${'border-gray-100'}`}>
+                      {createMonthDayOptions().map((day) => {
+                        // 确保我们有一个数组来处理
+                        const currentValue = Array.isArray(activePattern.value) 
+                          ? activePattern.value as number[] 
+                          : [];
+                        
+                        return (
+                          <button
+                            key={day.id}
+                            type="button"
+                            onClick={() => {
+                              if (currentValue.includes(day.id)) {
+                                setActivePattern({
+                                  ...activePattern,
+                                  value: currentValue.filter((id) => id !== day.id) as MonthlyActiveDays
+                                });
+                              } else {
+                                setActivePattern({
+                                  ...activePattern,
+                                  value: [...currentValue, day.id] as MonthlyActiveDays
+                                });
+                              }
+                            }}
+                            className={`px-1 py-1 rounded-full text-xs ${
+                              currentValue.includes(day.id)
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {day.id}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                  
+                  <div className="px-3 py-2 sm:p-3">
+                    <label htmlFor="monthlyTarget" className="block text-base font-medium text-gray-700 mb-1.5">
+                      每日次数
+                    </label>
+                    <input
+                      type="number"
+                      id="monthlyTarget"
+                      className="block w-full rounded-lg border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-3 py-2"
+                      value={activePattern.target || 1}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value);
+                        setActivePattern({
+                          ...activePattern,
+                          target: isNaN(value) ? 1 : Math.min(744, Math.max(1, value))
+                        });
+                      }}
+                      min={1}
+                      max={744}
+                    />
+                  </div>
+                </>
               )}
 
               {/* 每年活跃月份选择 */}
               {repeatPeriod === DailyRepeatPeriod.YEARLY && (
-                <div className="px-3 py-2 sm:p-3">
-                  <label className="block text-base font-medium text-gray-700 mb-1.5">
-                    每年哪几个月
-                  </label>
-                  <div className={`flex flex-wrap gap-2 p-3 border rounded-md ${'border-gray-100'}`}>
-                    {monthOptions.map((month) => {
-                      // 确保我们有一个数组来处理
-                      const currentValue = Array.isArray(activePattern.value) 
-                        ? activePattern.value as number[] 
-                        : [];
-                      
-                      return (
-                        <button
-                          key={month.id}
-                          type="button"
-                          onClick={() => {
-                            if (currentValue.includes(month.id)) {
-                              setActivePattern({
-                                type: DailyRepeatPeriod.YEARLY,
-                                value: currentValue.filter((id) => id !== month.id) as YearlyActiveMonths
-                              });
-                            } else {
-                              setActivePattern({
-                                type: DailyRepeatPeriod.YEARLY,
-                                value: [...currentValue, month.id] as YearlyActiveMonths
-                              });
-                            }
-                          }}
-                          className={`px-3 py-1 rounded-full text-sm ${
-                            currentValue.includes(month.id)
-                              ? 'bg-indigo-600 text-white'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          }`}
-                        >
-                          {month.name}
-                        </button>
-                      );
-                    })}
+                <>
+                  <div className="px-3 py-2 sm:p-3">
+                    <label className="block text-base font-medium text-gray-700 mb-1.5">
+                      每年哪几个月
+                    </label>
+                    <div className={`flex flex-wrap gap-2 p-3 border rounded-md ${'border-gray-100'}`}>
+                      {monthOptions.map((month) => {
+                        // 确保我们有一个数组来处理
+                        const currentValue = Array.isArray(activePattern.value) 
+                          ? activePattern.value as number[] 
+                          : [];
+                        
+                        return (
+                          <button
+                            key={month.id}
+                            type="button"
+                            onClick={() => {
+                              if (currentValue.includes(month.id)) {
+                                setActivePattern({
+                                  ...activePattern,
+                                  value: currentValue.filter((id) => id !== month.id) as YearlyActiveMonths
+                                });
+                              } else {
+                                setActivePattern({
+                                  ...activePattern,
+                                  value: [...currentValue, month.id] as YearlyActiveMonths
+                                });
+                              }
+                            }}
+                            className={`px-3 py-1 rounded-full text-sm ${
+                              currentValue.includes(month.id)
+                                ? 'bg-indigo-600 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {month.name}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                  
+                  <div className="px-3 py-2 sm:p-3">
+                    <label htmlFor="yearlyTarget" className="block text-base font-medium text-gray-700 mb-1.5">
+                      每月次数
+                    </label>
+                    <input
+                      type="number"
+                      id="yearlyTarget"
+                      className="block w-full rounded-lg border border-gray-100 bg-white shadow-sm hover:shadow-md transition-shadow focus:ring-2 focus:ring-indigo-500 text-sm px-3 py-2"
+                      value={activePattern.target || 1}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value);
+                        setActivePattern({
+                          ...activePattern,
+                          target: isNaN(value) ? 1 : Math.min(744, Math.max(1, value))
+                        });
+                      }}
+                      min={1}
+                      max={744}
+                    />
+                  </div>
+                </>
               )}
 
               {/* 标签 - 使用下拉选择和自定义输入 */}

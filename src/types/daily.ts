@@ -23,6 +23,8 @@ export type YearlyActiveMonths = number[]; // 1-12 代表每年的月份
 export type ActivePattern = {
   type: DailyRepeatPeriod;
   value: WeeklyActiveDays | MonthlyActiveDays | YearlyActiveMonths | number; // 当类型为每日时，值为每日次数；其他为对应的数组
+  target?: number; // 目标点击次数，达到后任务转为休眠状态
+  clicked_count?: number; // 当前已点击次数
 };
 
 // 日常任务类型定义

@@ -291,7 +291,7 @@ const RewardList = forwardRef<RewardListRef, RewardListProps>((props, ref) => {
       });
     },
     addRewardItem: (reward: Reward) => {
-      setRewards(prev => [...prev, reward]);
+      setRewards(prev => [reward, ...prev]);
     }
   }));
 

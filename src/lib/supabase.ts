@@ -14,6 +14,24 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true
+  },
+  global: {
+    // 设置更长的超时时间，防止通道过早关闭
+    fetch: (url, options) => {
+      const controller = new AbortController();
+      const { signal } = controller;
+      
+      // 在60秒后取消请求
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+      
+      return fetch(url, { ...options, signal })
+        .finally(() => clearTimeout(timeoutId));
+    }
+  },
+  realtime: {
+    // 增加心跳检查频率，保持连接活跃
+    timeout: 60000,
+    heartbeatIntervalMs: 15000
   }
 });
 
