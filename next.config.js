@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'export',
   webpack(config) {
     // 添加 SVG 文件处理
     config.module.rules.push({
