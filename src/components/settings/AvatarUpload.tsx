@@ -45,11 +45,11 @@ export default function AvatarUpload() {
             <DefaultAvatar className="w-20 h-20" />
           )}
         </div>
-        <div className="flex flex-col space-y-2">
+        <div className="flex flex-row gap-4">
           <button
-            onClick={handleRandomAvatar}
             type="button"
-            className="w-24 px-4 py-2 text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-indigo-400 disabled:cursor-not-allowed transition-colors duration-200"
+            onClick={handleRandomAvatar}
+            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-gray-900 bg-gray-200 hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2"
           >
             随机头像
           </button>

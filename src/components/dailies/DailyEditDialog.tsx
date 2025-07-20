@@ -704,46 +704,46 @@ export default function DailyEditDialog({
 
               {repeatPeriod === DailyRepeatPeriod.WEEKLY && (
                 <>
-                  <div className="px-3 py-2 sm:p-3">
-                    <label className="block text-base font-medium text-gray-700 mb-1.5">
-                      每周哪几天
-                    </label>
-                    <div className={`flex flex-wrap gap-2 p-3 border rounded-md ${'border-gray-100'}`}>
-                      {weekDayOptions.map((day) => {
-                        // 确保我们有一个数组来处理
-                        const currentValue = Array.isArray(activePattern.value) 
-                          ? activePattern.value as number[] 
-                          : [];
-                        
-                        return (
-                          <button
-                            key={day.id}
-                            type="button"
-                            onClick={() => {
-                              if (currentValue.includes(day.id)) {
-                                setActivePattern({
+                <div className="px-3 py-2 sm:p-3">
+                  <label className="block text-base font-medium text-gray-700 mb-1.5">
+                    每周哪几天
+                  </label>
+                  <div className={`flex flex-wrap gap-2 p-3 border rounded-md ${'border-gray-100'}`}>
+                    {weekDayOptions.map((day) => {
+                      // 确保我们有一个数组来处理
+                      const currentValue = Array.isArray(activePattern.value) 
+                        ? activePattern.value as number[] 
+                        : [];
+                      
+                      return (
+                        <button
+                          key={day.id}
+                          type="button"
+                          onClick={() => {
+                            if (currentValue.includes(day.id)) {
+                              setActivePattern({
                                   ...activePattern,
-                                  value: currentValue.filter((id) => id !== day.id) as WeeklyActiveDays
-                                });
-                              } else {
-                                setActivePattern({
+                                value: currentValue.filter((id) => id !== day.id) as WeeklyActiveDays
+                              });
+                            } else {
+                              setActivePattern({
                                   ...activePattern,
-                                  value: [...currentValue, day.id] as WeeklyActiveDays
-                                });
-                              }
-                            }}
-                            className={`px-3 py-1 rounded-full text-sm ${
-                              currentValue.includes(day.id)
-                                ? 'bg-indigo-600 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                          >
-                            {day.name}
-                          </button>
-                        );
-                      })}
-                    </div>
+                                value: [...currentValue, day.id] as WeeklyActiveDays
+                              });
+                            }
+                          }}
+                          className={`px-3 py-1 rounded-full text-sm ${
+                            currentValue.includes(day.id)
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {day.name}
+                        </button>
+                      );
+                    })}
                   </div>
+                </div>
                   
                   <div className="px-3 py-2 sm:p-3">
                     <label htmlFor="weeklyTarget" className="block text-base font-medium text-gray-700 mb-1.5">
@@ -771,46 +771,46 @@ export default function DailyEditDialog({
               {/* 每月活跃日期选择 */}
               {repeatPeriod === DailyRepeatPeriod.MONTHLY && (
                 <>
-                  <div className="px-3 py-2 sm:p-3">
-                    <label className="block text-base font-medium text-gray-700 mb-1.5">
-                      每月哪几天
-                    </label>
-                    <div className={`grid grid-cols-7 gap-2 p-3 border rounded-md ${'border-gray-100'}`}>
-                      {createMonthDayOptions().map((day) => {
-                        // 确保我们有一个数组来处理
-                        const currentValue = Array.isArray(activePattern.value) 
-                          ? activePattern.value as number[] 
-                          : [];
-                        
-                        return (
-                          <button
-                            key={day.id}
-                            type="button"
-                            onClick={() => {
-                              if (currentValue.includes(day.id)) {
-                                setActivePattern({
+                <div className="px-3 py-2 sm:p-3">
+                  <label className="block text-base font-medium text-gray-700 mb-1.5">
+                    每月哪几天
+                  </label>
+                  <div className={`grid grid-cols-7 gap-2 p-3 border rounded-md ${'border-gray-100'}`}>
+                    {createMonthDayOptions().map((day) => {
+                      // 确保我们有一个数组来处理
+                      const currentValue = Array.isArray(activePattern.value) 
+                        ? activePattern.value as number[] 
+                        : [];
+                      
+                      return (
+                        <button
+                          key={day.id}
+                          type="button"
+                          onClick={() => {
+                            if (currentValue.includes(day.id)) {
+                              setActivePattern({
                                   ...activePattern,
-                                  value: currentValue.filter((id) => id !== day.id) as MonthlyActiveDays
-                                });
-                              } else {
-                                setActivePattern({
+                                value: currentValue.filter((id) => id !== day.id) as MonthlyActiveDays
+                              });
+                            } else {
+                              setActivePattern({
                                   ...activePattern,
-                                  value: [...currentValue, day.id] as MonthlyActiveDays
-                                });
-                              }
-                            }}
-                            className={`px-1 py-1 rounded-full text-xs ${
-                              currentValue.includes(day.id)
-                                ? 'bg-indigo-600 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                          >
-                            {day.id}
-                          </button>
-                        );
-                      })}
-                    </div>
+                                value: [...currentValue, day.id] as MonthlyActiveDays
+                              });
+                            }
+                          }}
+                          className={`px-1 py-1 rounded-full text-xs ${
+                            currentValue.includes(day.id)
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {day.id}
+                        </button>
+                      );
+                    })}
                   </div>
+                </div>
                   
                   <div className="px-3 py-2 sm:p-3">
                     <label htmlFor="monthlyTarget" className="block text-base font-medium text-gray-700 mb-1.5">
@@ -838,46 +838,46 @@ export default function DailyEditDialog({
               {/* 每年活跃月份选择 */}
               {repeatPeriod === DailyRepeatPeriod.YEARLY && (
                 <>
-                  <div className="px-3 py-2 sm:p-3">
-                    <label className="block text-base font-medium text-gray-700 mb-1.5">
-                      每年哪几个月
-                    </label>
-                    <div className={`flex flex-wrap gap-2 p-3 border rounded-md ${'border-gray-100'}`}>
-                      {monthOptions.map((month) => {
-                        // 确保我们有一个数组来处理
-                        const currentValue = Array.isArray(activePattern.value) 
-                          ? activePattern.value as number[] 
-                          : [];
-                        
-                        return (
-                          <button
-                            key={month.id}
-                            type="button"
-                            onClick={() => {
-                              if (currentValue.includes(month.id)) {
-                                setActivePattern({
+                <div className="px-3 py-2 sm:p-3">
+                  <label className="block text-base font-medium text-gray-700 mb-1.5">
+                    每年哪几个月
+                  </label>
+                  <div className={`flex flex-wrap gap-2 p-3 border rounded-md ${'border-gray-100'}`}>
+                    {monthOptions.map((month) => {
+                      // 确保我们有一个数组来处理
+                      const currentValue = Array.isArray(activePattern.value) 
+                        ? activePattern.value as number[] 
+                        : [];
+                      
+                      return (
+                        <button
+                          key={month.id}
+                          type="button"
+                          onClick={() => {
+                            if (currentValue.includes(month.id)) {
+                              setActivePattern({
                                   ...activePattern,
-                                  value: currentValue.filter((id) => id !== month.id) as YearlyActiveMonths
-                                });
-                              } else {
-                                setActivePattern({
+                                value: currentValue.filter((id) => id !== month.id) as YearlyActiveMonths
+                              });
+                            } else {
+                              setActivePattern({
                                   ...activePattern,
-                                  value: [...currentValue, month.id] as YearlyActiveMonths
-                                });
-                              }
-                            }}
-                            className={`px-3 py-1 rounded-full text-sm ${
-                              currentValue.includes(month.id)
-                                ? 'bg-indigo-600 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                          >
-                            {month.name}
-                          </button>
-                        );
-                      })}
-                    </div>
+                                value: [...currentValue, month.id] as YearlyActiveMonths
+                              });
+                            }
+                          }}
+                          className={`px-3 py-1 rounded-full text-sm ${
+                            currentValue.includes(month.id)
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {month.name}
+                        </button>
+                      );
+                    })}
                   </div>
+                </div>
                   
                   <div className="px-3 py-2 sm:p-3">
                     <label htmlFor="yearlyTarget" className="block text-base font-medium text-gray-700 mb-1.5">

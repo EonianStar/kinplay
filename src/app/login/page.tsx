@@ -9,10 +9,11 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { signIn, resetPassword } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,9 +24,30 @@ export default function LoginPage() {
       await signIn(email, password);
       router.push('/tasks');
     } catch (err) {
-      setError(err instanceof Error ? err.message : '登录失败');
+      const errorMessage = err instanceof Error ? err.message : '登录失败';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!email) {
+      setError('请输入邮箱地址');
+      return;
+    }
+    
+    setError(null);
+    setResetLoading(true);
+    
+    try {
+      await resetPassword(email);
+      setError('请您 注册新账号 或 查收重置密码邮件');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '发送重置密码邮件失败';
+      setError(errorMessage);
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -39,7 +61,21 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
             <div className="bg-red-50 text-red-800 p-3 rounded-md text-sm">
-              {error}
+              {error.includes('邮箱或密码错误') ? (
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-red-600">请检查邮箱或密码是否正确</span>
+                  <button
+                    type="button"
+                    onClick={handleResetPassword}
+                    disabled={resetLoading}
+                    className="text-xs text-indigo-600 hover:text-indigo-500 font-medium disabled:opacity-50"
+                  >
+                    {resetLoading ? '发送中...' : '忘记密码'}
+                  </button>
+                </div>
+              ) : (
+                error
+              )}
             </div>
           )}
           <div>

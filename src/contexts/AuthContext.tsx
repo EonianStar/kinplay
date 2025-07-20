@@ -11,10 +11,13 @@ interface AuthContextType {
   timezone: string;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
+  deleteUser: () => Promise<void>;
   signInWithEmailPassword: (email: string, password: string) => Promise<void>;
   signInWithWeChat: () => Promise<void>;
   updateUserProfile: (updates: { photoURL?: string; displayName?: string }) => Promise<void>;
+  updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -24,10 +27,13 @@ const AuthContext = createContext<AuthContextType>({
   timezone: 'UTC',
   signIn: async () => { throw new Error('AuthContext not initialized'); },
   signUp: async () => { throw new Error('AuthContext not initialized'); },
+  resetPassword: async () => { throw new Error('AuthContext not initialized'); },
   signOut: async () => { throw new Error('AuthContext not initialized'); },
+  deleteUser: async () => { throw new Error('AuthContext not initialized'); },
   signInWithEmailPassword: async () => { throw new Error('AuthContext not initialized'); },
   signInWithWeChat: async () => { throw new Error('AuthContext not initialized'); },
   updateUserProfile: async () => { throw new Error('AuthContext not initialized'); },
+  updatePassword: async () => { throw new Error('AuthContext not initialized'); },
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -116,9 +122,32 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const signIn = async (email: string, password: string) => {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      if (error) {
+        // 统一处理登录错误，给出友好的提示
+        if (error.message === 'Invalid login credentials') {
+          throw new Error('邮箱或密码错误');
+        } else if (error.message.includes('Email not confirmed')) {
+          throw new Error('请查收邮件并激活您的账号');
+        } else {
+          throw error;
+        }
+      }
     } catch (error) {
       console.error('登录失败:', error);
+      throw error;
+    }
+  };
+
+  const resetPassword = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) {
+        throw error;
+      }
+    } catch (error) {
+      console.error('发送重置密码邮件失败:', error);
       throw error;
     }
   };
@@ -135,7 +164,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signUp = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { error } = await supabase.auth.signUp({ 
+        email, 
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/login`
+        }
+      });
       if (error) throw error;
     } catch (error) {
       console.error('注册失败:', error);
@@ -180,6 +215,55 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
+  const updatePassword = async (currentPassword: string, newPassword: string) => {
+    if (!user?.email) throw new Error('用户未登录');
+    // 1. 校验当前密码
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: currentPassword,
+    });
+    if (signInError) {
+      throw new Error('Invalid credentials');
+    }
+    // 2. 更新新密码
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+    if (updateError) {
+      throw updateError;
+    }
+  };
+
+  const deleteUser = async () => {
+    try {
+      if (!user) {
+        throw new Error('用户未登录');
+      }
+
+      // 调用 Edge Function 删除所有数据（包括业务数据和认证信息）
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/delete-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ user_id: user.id }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`删除账号失败: ${errorData.error || '未知错误'}`);
+      }
+
+      // 清除本地状态
+      setUser(null);
+      setSession(null);
+    } catch (error) {
+      console.error('删除账号失败:', error);
+      throw error;
+    }
+  };
+
   const value = {
     user,
     session,
@@ -187,10 +271,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     timezone,
     signIn,
     signUp,
+    resetPassword,
     signOut,
+    deleteUser,
     signInWithEmailPassword,
     signInWithWeChat,
     updateUserProfile,
+    updatePassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

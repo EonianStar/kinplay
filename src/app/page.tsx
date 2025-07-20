@@ -110,8 +110,9 @@ export default function HomePage() {
       <footer className="bg-white/80 backdrop-blur-sm border-t border-gray-200">
         <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
           <div className="md:flex md:items-center md:justify-between">
-            <div className="text-sm text-gray-500">
-              © {new Date().getFullYear()} KinPlay. All rights reserved.
+            <div className="text-sm text-gray-500 flex items-center space-x-2">
+              <span>© {new Date().getFullYear()} KinPlay. All rights reserved.</span>
+              <span>蜀ICP备2025138044号-1</span>
             </div>
             <div className="mt-4 md:mt-0">
               <div className="flex space-x-6">

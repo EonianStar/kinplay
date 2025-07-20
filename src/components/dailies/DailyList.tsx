@@ -182,11 +182,11 @@ const SortableDailyItem = ({
           {isCompleting ? (
             <div className="h-5 w-5 rounded animate-pulse bg-indigo-300"></div>
           ) : (
-            <input
-              type="checkbox"
-              className="h-5 w-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
-              onChange={() => onToggleComplete(daily)}
-            />
+          <input
+            type="checkbox"
+            className="h-5 w-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+            onChange={() => onToggleComplete(daily)}
+          />
           )}
         </div>
         
@@ -563,7 +563,7 @@ const DailyList = forwardRef<DailyListRef, DailyListProps>(({ onAddClick, filter
           } : item
         )
       );
-      
+        
       // 计算获得的经验值和金币
       const exp = calculateExperience('daily', daily.difficulty, daily.value_level || 0);
       const coins = calculateCoins('daily', daily.difficulty, daily.value_level || 0);
@@ -588,7 +588,7 @@ const DailyList = forwardRef<DailyListRef, DailyListProps>(({ onAddClick, filter
             } : item
           )
         );
-      }
+        }
       
       // 增加用户经验和金币
       if (userId) {
