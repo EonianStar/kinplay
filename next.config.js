@@ -20,7 +20,9 @@ const nextConfig = {
     // 构建时忽略 TypeScript 错误
     ignoreBuildErrors: true,
   },
-  images:{dangerouslyAllowSVG:true,remotePatterns:[{protocol:"https",hostname:"api.dicebear.com"}]},
+  images: {
+    unoptimized: true,
+  },
 };
 
 module.exports = nextConfig;

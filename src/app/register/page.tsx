@@ -4,8 +4,10 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 export default function RegisterPage() {
+  const [nickname, setNickname] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -16,20 +18,81 @@ export default function RegisterPage() {
   const router = useRouter();
   const { signUp } = useAuth();
 
+  // 头像列表
+  const avatarList = [
+    'https://img.kinplay.fun/default/FluffyAvatar.png',
+    'https://img.kinplay.fun/default/CocoAvatar.png',
+    'https://img.kinplay.fun/default/SparkyAvatar.png',
+    'https://img.kinplay.fun/default/GarfatAvatar.png',
+    'https://img.kinplay.fun/default/UnderbiteAvatar.png',
+    'https://img.kinplay.fun/default/CurtisAvatar.png',
+    'https://img.kinplay.fun/default/CarrotAvatar.png',
+    'https://img.kinplay.fun/default/HammerAvatar.png',
+    'https://img.kinplay.fun/default/BaconAvatar.png',
+    'https://img.kinplay.fun/default/BarbieAvatar.png',
+    'https://img.kinplay.fun/default/LouAvatar.png',
+    'https://img.kinplay.fun/default/MacchiatoAvatar.png',
+    'https://img.kinplay.fun/default/BruceAvatar.png',
+    'https://img.kinplay.fun/default/TiagraAvatar.png',
+    'https://img.kinplay.fun/default/HarryAvatar.png',
+    'https://img.kinplay.fun/default/OttaAvatar.png',
+    'https://img.kinplay.fun/default/NemoAvatar.png',
+    'https://img.kinplay.fun/default/MorseAvatar.png',
+    'https://img.kinplay.fun/default/ValienteAvatar.png',
+    'https://img.kinplay.fun/default/MoonmoonAvatar.png',
+  ];
+
+  // 昵称校验规则
+  function validateNickname(nickname: string): string | null {
+    if (!nickname) return '昵称不能为空';
+    // 汉字2~10
+    const chinese = /^[\u4e00-\u9fa5]{2,10}$/;
+    // 非汉字4~20
+    const nonChinese = /^[A-Za-z0-9_]{4,20}$/;
+    // 不含标点/特殊符号/空格
+    const invalid = /[\s\p{P}\p{S}]/u;
+    if (invalid.test(nickname)) return '昵称不能包含空格、标点或特殊符号';
+    if (chinese.test(nickname) || nonChinese.test(nickname)) return null;
+    return '昵称格式不正确，需2~10个汉字或4~20个字母/数字/下划线';
+  }
+
+  // 注册前查重
+  async function isNicknameTaken(nickname: string): Promise<boolean> {
+    const { data, error } = await supabase.rpc('check_nickname_exists', { nickname });
+    if (error) return false; // 查询失败时不阻断注册
+    return data === true;
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
+    // 校验昵称
+    const nicknameError = validateNickname(nickname);
+    if (nicknameError) {
+      setError(nicknameError);
+      return;
+    }
+    // 查重
+    setIsLoading(true);
+    const taken = await isNicknameTaken(nickname);
+    if (taken) {
+      setError('此昵称已被占用');
+      setIsLoading(false);
+      return;
+    }
     if (password !== confirmPassword) {
       setError('两次输入的密码不一致');
+      setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
+    // 随机分配头像
+    const randomAvatar = avatarList[Math.floor(Math.random() * avatarList.length)];
 
     try {
-      await signUp(email, password);
-      router.push('/tasks');
+      await signUp(email, password, randomAvatar, nickname);
+      router.push('/login');
     } catch (err) {
       setError(err instanceof Error ? err.message : '注册失败');
     } finally {
@@ -50,6 +113,22 @@ export default function RegisterPage() {
               {error}
             </div>
           )}
+          {/* 昵称表单项 */}
+          <div>
+            <label htmlFor="nickname" className="block text-sm font-medium text-gray-700">
+              昵称
+            </label>
+            <input
+              id="nickname"
+              type="text"
+              required
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              autoComplete="off"
+              maxLength={20}
+            />
+          </div>
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">
               邮箱

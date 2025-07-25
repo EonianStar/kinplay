@@ -10,12 +10,11 @@ interface AuthContextType {
   loading: boolean;
   timezone: string;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, avatarUrl?: string, nickname?: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   deleteUser: () => Promise<void>;
   signInWithEmailPassword: (email: string, password: string) => Promise<void>;
-  signInWithWeChat: () => Promise<void>;
   updateUserProfile: (updates: { photoURL?: string; displayName?: string }) => Promise<void>;
   updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
@@ -31,7 +30,6 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => { throw new Error('AuthContext not initialized'); },
   deleteUser: async () => { throw new Error('AuthContext not initialized'); },
   signInWithEmailPassword: async () => { throw new Error('AuthContext not initialized'); },
-  signInWithWeChat: async () => { throw new Error('AuthContext not initialized'); },
   updateUserProfile: async () => { throw new Error('AuthContext not initialized'); },
   updatePassword: async () => { throw new Error('AuthContext not initialized'); },
 });
@@ -119,6 +117,43 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     };
   }, []);
 
+  // 新增：用户登录后自动分配头像
+  useEffect(() => {
+    if (user && !user.user_metadata?.avatar_url) {
+      const randomAvatar = [
+        'https://img.kinplay.fun/default/FluffyAvatar.png',
+        'https://img.kinplay.fun/default/CocoAvatar.png',
+        'https://img.kinplay.fun/default/SparkyAvatar.png',
+        'https://img.kinplay.fun/default/GarfatAvatar.png',
+        'https://img.kinplay.fun/default/UnderbiteAvatar.png',
+        'https://img.kinplay.fun/default/CurtisAvatar.png',
+        'https://img.kinplay.fun/default/CarrotAvatar.png',
+        'https://img.kinplay.fun/default/HammerAvatar.png',
+        'https://img.kinplay.fun/default/BaconAvatar.png',
+        'https://img.kinplay.fun/default/BarbieAvatar.png',
+        'https://img.kinplay.fun/default/LouAvatar.png',
+        'https://img.kinplay.fun/default/MacchiatoAvatar.png',
+        'https://img.kinplay.fun/default/BruceAvatar.png',
+        'https://img.kinplay.fun/default/TiagraAvatar.png',
+        'https://img.kinplay.fun/default/HarryAvatar.png',
+        'https://img.kinplay.fun/default/OttaAvatar.png',
+        'https://img.kinplay.fun/default/NemoAvatar.png',
+        'https://img.kinplay.fun/default/MorseAvatar.png',
+        'https://img.kinplay.fun/default/ValienteAvatar.png',
+        'https://img.kinplay.fun/default/MoonmoonAvatar.png',
+      ][Math.floor(Math.random() * 20)]; // 确保头像列表有足够多的头像
+      supabase.auth.updateUser({
+        data: { avatar_url: randomAvatar }
+      }).then(({ data, error }) => {
+        if (error) {
+          console.error('自动分配头像失败:', error);
+        } else {
+          setUser(data.user);
+        }
+      });
+    }
+  }, [user]);
+
   const signIn = async (email: string, password: string) => {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -162,13 +197,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string, avatarUrl?: string, nickname?: string) => {
     try {
       const { error } = await supabase.auth.signUp({ 
         email, 
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/login`
+          emailRedirectTo: `${window.location.origin}/login`,
+          data: {
+            ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
+            ...(nickname ? { display_name: nickname } : {}),
+          }
         }
       });
       if (error) throw error;
@@ -180,19 +219,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signInWithEmailPassword = async (email: string, password: string) => {
     return signIn(email, password);
-  };
-
-  const signInWithWeChat = async () => {
-    try {
-      // 微信登录逻辑
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'wechat' as any, // 使用类型断言处理类型问题
-      });
-      if (error) throw error;
-    } catch (error) {
-      console.error('微信登录失败:', error);
-      throw error;
-    }
   };
 
   const updateUserProfile = async (updates: { photoURL?: string; displayName?: string }) => {
@@ -275,7 +301,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     signOut,
     deleteUser,
     signInWithEmailPassword,
-    signInWithWeChat,
     updateUserProfile,
     updatePassword,
   };

@@ -249,30 +249,71 @@ export default function Navbar() {
                     onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                     className="flex text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
-                    <div className="h-9 w-9 rounded-full bg-indigo-100 flex items-center justify-center">
-                      <span className="text-base text-indigo-600 font-medium">
-                        {user?.email?.[0].toUpperCase() || 'U'}
-                      </span>
+                    <div className="h-9 w-9 rounded-full bg-indigo-100 flex items-center justify-center overflow-hidden">
+                      {user?.user_metadata?.avatar_url ? (
+                        <img
+                          src={user.user_metadata.avatar_url}
+                          alt="User avatar"
+                          className="w-full h-full object-cover rounded-full"
+                        />
+                      ) : (
+                        <span className="text-base text-indigo-600 font-medium">
+                          {user?.email?.[0].toUpperCase() || 'U'}
+                        </span>
+                      )}
                     </div>
                   </button>
 
-                  {isDropdownOpen && (
-                    <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 py-1 z-50">
-                      <Link
-                        href="/settings"
-                        className="block px-4 py-2.5 text-base text-gray-700 hover:bg-gray-100"
-                        onClick={() => setIsDropdownOpen(false)}
-                      >
-                        设置
-                      </Link>
-                      <button
-                        onClick={handleSignOut}
-                        className="block w-full text-left px-4 py-2.5 text-base text-gray-700 hover:bg-gray-100"
-                      >
-                        退出
-                      </button>
-                    </div>
-                  )}
+                  
+                {isDropdownOpen && (
+                  <div className="origin-top-right absolute right-0 mt-2 w-28 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 py-1 z-50 min-w-[80px] max-w-[120px]">
+                    <button
+                      className="block w-full text-center px-5 py-2 text-base text-gray-700 hover:bg-gray-100"
+                      onTouchEnd={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsDropdownOpen(false);
+                        setTimeout(() => {
+                          router.push('/settings');
+                        }, 200);
+                      }}
+                      onClick={(e) => {
+                        if (e.detail !== 0) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setIsDropdownOpen(false);
+                          setTimeout(() => {
+                            router.push('/settings');
+                          }, 100);
+                        }
+                      }}
+                    >
+                      设置
+                    </button>
+                    
+                    <button
+                      className="block w-full text-center px-5 py-2 text-base text-gray-700 hover:bg-gray-100"
+                      onTouchEnd={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('点击退出按钮');
+                        setIsDropdownOpen(false);
+                        await handleSignOut();
+                      }}
+                      onClick={async (e) => {
+                        if (e.detail !== 0) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          console.log('点击退出按钮');
+                          setIsDropdownOpen(false);
+                          await handleSignOut();
+                        }
+                      }}
+                    >
+                      退出
+                    </button>
+                  </div>
+                )}
                 </div>
               </div>
             </div>
@@ -362,10 +403,18 @@ export default function Navbar() {
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 className="flex text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
-                  <span className="text-sm text-indigo-600 font-medium">
-                    {user?.email?.[0].toUpperCase() || 'U'}
-                  </span>
+                <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center overflow-hidden">
+                  {user?.user_metadata?.avatar_url ? (
+                    <img
+                      src={user.user_metadata.avatar_url}
+                      alt="User avatar"
+                      className="w-full h-full object-cover rounded-full"
+                    />
+                  ) : (
+                    <span className="text-sm text-indigo-600 font-medium">
+                      {user?.email?.[0].toUpperCase() || 'U'}
+                    </span>
+                  )}
                 </div>
               </button>
 

@@ -66,12 +66,12 @@ export default function PasswordForm() {
           当前密码
         </label>
         <div className="relative">
-          <input
+        <input
             type={showCurrentPassword ? 'text' : 'password'}
-            id="currentPassword"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            required
+          id="currentPassword"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          required
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 placeholder-gray-400 bg-white"
           />
           <button
@@ -99,12 +99,12 @@ export default function PasswordForm() {
           新密码
         </label>
         <div className="relative">
-          <input
+        <input
             type={showNewPassword ? 'text' : 'password'}
-            id="newPassword"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            required
+          id="newPassword"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          required
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 placeholder-gray-400 bg-white"
           />
           <button
@@ -132,12 +132,12 @@ export default function PasswordForm() {
           确认新密码
         </label>
         <div className="relative">
-          <input
+        <input
             type={showConfirmPassword ? 'text' : 'password'}
-            id="confirmPassword"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
+          id="confirmPassword"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          required
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-gray-900 placeholder-gray-400 bg-white"
           />
           <button
@@ -167,13 +167,13 @@ export default function PasswordForm() {
       )}
 
       <div className="flex flex-row gap-4">
-        <button
-          type="submit"
-          disabled={loading}
+      <button
+        type="submit"
+        disabled={loading}
           className={`inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md bg-indigo-600 hover:bg-indigo-700 text-white focus:outline-none focus:ring-2 focus:ring-offset-2 ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-        >
-          {loading ? '修改中...' : '修改密码'}
-        </button>
+      >
+        {loading ? '修改中...' : '修改密码'}
+      </button>
       </div>
     </form>
   );
